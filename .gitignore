@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# Local/private app data
+apps/api/data/*.json
+
+# Local agent/runtime workdirs
+.claude/
+.codex/
+.gemini/
+.pytest_cache/
+.ruff_cache/
+
+# GitHub Actions workflows need a PAT with workflow scope.
+# Keep local CI templates out of the first Railway deploy push.
+.github/workflows/
+
+# Logs
+*.log
+
+# Orchestration runtime (keep config, ignore generated logs/state)
+.claude/logs/*.jsonl
+.claude/logs/implementation-state.json
+
+# IDE
+.idea/
+.vscode/

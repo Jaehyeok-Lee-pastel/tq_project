@@ -1,0 +1,1716 @@
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { BookOpenCheck, ClipboardCheck, FlaskConical, History, ListChecks, RefreshCw, Save, SlidersHorizontal, Target, Trash2 } from "lucide-react";
+import { useAuth } from "../app/AuthContext";
+import { supabase } from "../lib/supabase";
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const userSettingsKey = "tqcoach.userSettings";
+
+type Allocation = { symbol: string; name: string; target_ratio: number; target_amount: number; role: string };
+type SplitStep = { step: string; trigger: string; ratio_of_target: number; amount: number; note: string };
+type ExecutionStep = {
+  side: "buy" | "sell";
+  step: string;
+  symbol: string;
+  status: "ready" | "wait" | "blocked" | "done";
+  trigger: string;
+  trigger_price?: number | null;
+  trigger_label?: string;
+  current_price?: number | null;
+  distance_to_trigger_pct?: number | null;
+  amount: number;
+  ratio_of_target: number;
+  reason: string;
+  action_label: string;
+};
+type ManagedStrategy = {
+  id: string;
+  status: "active" | "paused" | "archived";
+  created_at: string;
+  updated_at: string;
+  version: number;
+  selected_reason: string;
+  total_capital: number;
+  market: {
+    qqq_close: number;
+    qqq_sma200: number;
+    qqq_sma20?: number | null;
+    qqq_sma50?: number | null;
+    qqq_high20?: number | null;
+    as_of: string;
+  };
+  plan: {
+    id: string;
+    title: string;
+    summary: string;
+    allocations: Allocation[];
+    buy_plan: SplitStep[];
+    sell_plan: SplitStep[];
+    pros: string[];
+    cons: string[];
+  };
+  journal: JournalEntry[];
+  version_history: {
+    version: number;
+    created_at: string;
+    change_type: "created" | "adjustment" | "manual";
+    title: string;
+    note: string;
+    before_allocations: { symbol: string; ratio: number }[];
+    after_allocations: { symbol: string; ratio: number }[];
+  }[];
+};
+type JournalEntry = {
+  id: string;
+  created_at: string;
+  entry_type:
+    | "buy"
+    | "sell"
+    | "hold"
+    | "rebalance"
+    | "review"
+    | "rule_check"
+    | "note"
+    | "deposit"
+    | "fx"
+    | "cash_transfer";
+  symbol: string;
+  amount: number;
+  quantity: number;
+  price: number;
+  reason: string;
+  mood: string;
+  note: string;
+  qqq_distance_from_200ma: number;
+};
+type ManagedGuide = {
+  strategy: ManagedStrategy;
+  compliance_score: number;
+  current_action: string;
+  checklist: string[];
+  next_review: string;
+  issues: { level: "ok" | "watch" | "danger"; title: string; detail: string }[];
+  execution_plan: ExecutionStep[];
+};
+type AdjustmentAdvice = {
+  verdict: "ok" | "watch" | "danger";
+  headline: string;
+  summary: string;
+  current_cash_ratio: number;
+  target_cash_ratio: number;
+  minimum_cash_ratio: number;
+  qqq_distance_from_200ma: number;
+  suggested_allocations: {
+    symbol: string;
+    current_ratio: number;
+    suggested_ratio: number;
+    delta_ratio: number;
+    reason: string;
+  }[];
+  issues: string[];
+  actions: string[];
+};
+type ContributionAllocation = {
+  symbol: string;
+  role: string;
+  current_amount: number;
+  target_amount_after: number;
+  gap_amount: number;
+  suggested_amount: number;
+  action: "buy" | "wait" | "hold" | "rebalance";
+  reason: string;
+};
+type ContributionPlanOption = {
+  id: string;
+  title: string;
+  risk_level: "defensive" | "balanced" | "aggressive";
+  recommendation_score: number;
+  headline: string;
+  summary: string;
+  contribution_amount: number;
+  pay_day: number;
+  current_total_capital: number;
+  new_total_capital: number;
+  qqq_distance_from_200ma: number;
+  available_cash_after_deposit: number;
+  actions: string[];
+  allocations: ContributionAllocation[];
+};
+type ContributionAdvice = {
+  headline: string;
+  summary: string;
+  contribution_amount: number;
+  pay_day: number;
+  current_total_capital: number;
+  new_total_capital: number;
+  qqq_distance_from_200ma: number;
+  available_cash_after_deposit: number;
+  actions: string[];
+  allocations: ContributionAllocation[];
+  recommended_plan_id: string;
+  plans: ContributionPlanOption[];
+};
+type FxRate = {
+  pair: string;
+  provider: string;
+  rate: number;
+  as_of: string;
+  freshness: string;
+  source_note: string;
+};
+type QuoteResponse = {
+  symbol: string;
+  provider: string;
+  price: number;
+  as_of: string;
+  freshness: string;
+  source_note: string;
+};
+type PriceRow = { date: string; close: number };
+type HistoryResponse = {
+  symbol: string;
+  provider: string;
+  rows: PriceRow[];
+  latest: PriceRow;
+  sma20?: number | null;
+  sma50?: number | null;
+  sma200?: number | null;
+  high20?: number | null;
+};
+type DataReliabilityItem = {
+  symbol: string;
+  provider: string;
+  latest_date: string;
+  age_days: number;
+  row_count: number;
+  has_sma20: boolean;
+  has_sma50: boolean;
+  has_sma200: boolean;
+  score: number;
+  status: "ok" | "watch" | "danger";
+  message: string;
+};
+type DataReliabilityResponse = {
+  provider: string;
+  checked_at: string;
+  items: DataReliabilityItem[];
+};
+type BacktestStrategy = "qqq_buy_hold" | "tqqq_buy_hold" | "tqqq_200ma" | "qld_200ma";
+type ManageTab = "overview" | "journal" | "strategy";
+type UserSettings = {
+  targetCashRatio: number;
+  monthlyContribution: number;
+  payDay: number;
+  usdKrwRate: number;
+};
+
+function loadUserSettings(): UserSettings {
+  try {
+    const raw = localStorage.getItem(userSettingsKey);
+    if (!raw) throw new Error("no settings");
+    return { targetCashRatio: 20, monthlyContribution: 1_000_000, payDay: 10, usdKrwRate: 1380, ...JSON.parse(raw) };
+  } catch {
+    return { targetCashRatio: 20, monthlyContribution: 1_000_000, payDay: 10, usdKrwRate: 1380 };
+  }
+}
+
+function formatKrw(value: number) {
+  return `${Math.round(value).toLocaleString("ko-KR")}원`;
+}
+function formatUsdFromKrw(value: number, usdKrwRate: number) {
+  if (!usdKrwRate) return "-";
+  return `$${(value / usdKrwRate).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+}
+function formatDualCurrency(value: number, symbol: string, usdKrwRate: number) {
+  if (symbol === "CASH" || symbol === "SGOV" || symbol === "BIL") {
+    return formatKrw(value);
+  }
+  return `${formatUsdFromKrw(value, usdKrwRate)} (${formatKrw(value)})`;
+}
+function formatPct(value: number) {
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+function formatUsd(value?: number | null) {
+  if (!value) return "-";
+  return `$${value.toFixed(2)}`;
+}
+function isUsdAsset(symbol: string) {
+  return symbol !== "CASH" && !symbol.startsWith("ACE ");
+}
+function quoteKrw(quote: QuoteResponse | undefined, usdKrwRate: number) {
+  return quote ? quote.price * usdKrwRate : 0;
+}
+function actionLabelWithCurrency(label: string, amount: number, symbol: string, usdKrwRate: number) {
+  if (!amount || label === "대기" || label === "실행 금지" || label === "실행 완료") return label;
+  const action = label.includes("매도") ? "매도 후보" : "매수 후보";
+  return `${action} ${formatDualCurrency(amount, symbol, usdKrwRate)}`;
+}
+function formatDate(value: string) {
+  return new Date(value).toLocaleString("ko-KR");
+}
+function journalTypeLabel(type: JournalEntry["entry_type"]) {
+  return {
+    buy: "매수",
+    sell: "매도",
+    hold: "보유",
+    rebalance: "리밸런싱",
+    review: "리뷰",
+    rule_check: "규칙 점검",
+    note: "메모",
+    deposit: "입금",
+    fx: "환전",
+    cash_transfer: "현금 이동",
+  }[type];
+}
+function marketDataAgeDays(asOf: string) {
+  const asOfTime = new Date(`${asOf}T00:00:00`).getTime();
+  if (Number.isNaN(asOfTime)) return null;
+  const now = new Date();
+  const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.max(0, Math.floor((todayTime - asOfTime) / 86_400_000));
+}
+function marketDataFreshness(asOf: string) {
+  const ageDays = marketDataAgeDays(asOf);
+  if (ageDays == null) return { level: "watch", label: "기준일 확인 필요" };
+  if (ageDays <= 1) return { level: "ok", label: "최신 일봉 기준" };
+  if (ageDays <= 4) return { level: "watch", label: `${ageDays}일 전 일봉 기준` };
+  return { level: "danger", label: `${ageDays}일 전 데이터` };
+}
+async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const { data } = await supabase.auth.getSession();
+  const headers = new Headers(init?.headers);
+  if (data.session?.access_token) headers.set("Authorization", `Bearer ${data.session.access_token}`);
+  const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers });
+  if (!response.ok) throw new Error(`API 오류: ${response.status}`);
+  return (await response.json()) as T;
+}
+function allocationPolicy(symbol: string) {
+  if (symbol === "TQQQ" || symbol === "QLD") {
+    return "조건부 분할매수";
+  }
+  if (symbol === "CASH" || symbol === "SGOV" || symbol === "BIL") {
+    return "분할매수 대기";
+  }
+  return "목표 비중 매수";
+}
+function allocationPolicyDetail(symbol: string) {
+  if (symbol === "TQQQ") {
+    return "QQQ 200일선 위, 눌림/돌파/이격 완화 조건일 때만 단계별 실행";
+  }
+  if (symbol === "QLD") {
+    return "TQQQ보다 완만하지만 동일하게 레버리지 분할 원칙 적용";
+  }
+  if (symbol === "CASH" || symbol === "SGOV" || symbol === "BIL") {
+    return "아직 매수하지 않는 대기 자금이며 하락/신호 발생 시 사용";
+  }
+  return "레버리지 타이밍 자산이 아니라 포트폴리오 완충 코어로 목표 비중까지 매수";
+}
+
+function executableSymbol(allocation: Allocation, quotes: Record<string, QuoteResponse>, usdKrwRate: number) {
+  if (allocation.symbol !== "QQQ") return allocation.symbol;
+  const qqqKrw = quoteKrw(quotes.QQQ, usdKrwRate);
+  const qqqmKrw = quoteKrw(quotes.QQQM, usdKrwRate);
+  if (qqqKrw && qqqmKrw && allocation.target_amount < qqqKrw && allocation.target_amount >= qqqmKrw) {
+    return "QQQM";
+  }
+  return "QQQ";
+}
+
+function allocationExecutionDetail(allocation: Allocation, quotes: Record<string, QuoteResponse>, usdKrwRate: number) {
+  if (!isUsdAsset(allocation.symbol)) return "원화/현금성 자산은 원화 기준으로 관리합니다.";
+  const symbol = executableSymbol(allocation, quotes, usdKrwRate);
+  const quote = quotes[symbol];
+  if (!quote) return "현재가를 불러오면 1주 가능 여부와 대체 종목을 계산합니다.";
+  const priceKrw = quoteKrw(quote, usdKrwRate);
+  const shares = priceKrw ? Math.floor(allocation.target_amount / priceKrw) : 0;
+  if (allocation.symbol === "QQQ" && symbol === "QQQM") {
+    return `QQQ 1주가 목표금액을 초과합니다. 같은 나스닥100 저가형 ETF인 QQQM 기준 약 ${shares}주 실행이 현실적입니다.`;
+  }
+  if (shares < 1) {
+    return `${symbol} 1주 금액이 목표금액보다 큽니다. 현금 대기, QQQM 같은 저가 대체, 또는 증권사 소수점 매수를 검토하세요.`;
+  }
+  return `${symbol} 현재가 ${formatUsd(quote.price)} 기준 약 ${shares}주까지 실행 가능합니다.`;
+}
+
+function executionBucketSymbol(symbol: string, allocations: Allocation[]) {
+  const upper = symbol.toUpperCase();
+  if (upper === "QQQM" && allocations.some((allocation) => allocation.symbol === "QQQ")) return "QQQ";
+  return upper;
+}
+
+function executionStage(row: { symbol: string; targetAmount: number; executedAmount: number; progressPct: number }, plan: SplitStep[]) {
+  if (row.executedAmount <= 0) return "미집행";
+  if (row.progressPct >= 110) return "목표 초과";
+  if (isCashLikeSymbol(row.symbol)) return "대기 운용 중";
+  if (row.symbol !== "TQQQ" && row.symbol !== "QLD") return row.progressPct >= 95 ? "목표 근접" : "진행 중";
+  let cumulativeRatio = 0;
+  const completed = plan.reduce((count, step) => {
+    const stepRatio = step.ratio_of_target || (row.targetAmount > 0 ? (step.amount / row.targetAmount) * 100 : 0);
+    cumulativeRatio += stepRatio;
+    return row.progressPct >= cumulativeRatio * 0.95 ? count + 1 : count;
+  }, 0);
+  if (completed >= 3) return "3차 완료";
+  if (completed === 2) return "2차 완료";
+  if (completed === 1) return "1차 완료";
+  return "1차 진행";
+}
+
+function nextExecutionHint(row: { symbol: string; progressPct: number }, guide: ManagedGuide | null) {
+  if (row.symbol === "CASH") return "분할매수 재원입니다. 최소 버퍼를 넘는 여유 현금은 SGOV 대기 운용을 검토합니다.";
+  if (isCashLikeSymbol(row.symbol)) return "현금성 대기자산입니다. 매수 조건이 오면 매도해 TQQQ/QLD 분할매수 재원으로 전환합니다.";
+  if (row.progressPct >= 110) return "추가 매수보다 리밸런싱 검토";
+  const nextStep = guide?.execution_plan.find((step) => step.symbol === row.symbol && step.side === "buy" && step.status !== "done");
+  if (nextStep) return nextStep.trigger_label || nextStep.trigger;
+  if (row.progressPct >= 95) return "목표 비중 유지, 조건 발생 시 리밸런싱";
+  return "목표금액과 현재가 기준으로 추가 실행 검토";
+}
+
+function isCashLikeSymbol(symbol: string) {
+  return ["CASH", "SGOV", "BIL"].includes(symbol.toUpperCase());
+}
+function allocationRatioOf(strategy: ManagedStrategy, symbols: string[]) {
+  const targets = symbols.map((symbol) => symbol.toUpperCase());
+  return strategy.plan.allocations
+    .filter((allocation) => targets.includes(allocation.symbol.toUpperCase()))
+    .reduce((sum, allocation) => sum + allocation.target_ratio, 0);
+}
+function latestTradeEntries(strategy: ManagedStrategy) {
+  return [...strategy.journal]
+    .filter((entry) => ["buy", "sell", "rebalance"].includes(entry.entry_type))
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5);
+}
+function reviewEntry(entry: JournalEntry) {
+  const symbol = entry.symbol.toUpperCase();
+  const isLeveraged = symbol === "TQQQ" || symbol === "QLD";
+  if (entry.entry_type === "buy" && isLeveraged && entry.qqq_distance_from_200ma <= 0) {
+    return { level: "danger", label: "규칙 위반", note: "QQQ 200일선 아래에서 레버리지 매수 기록입니다." };
+  }
+  if (entry.entry_type === "buy" && isLeveraged && entry.qqq_distance_from_200ma >= 15) {
+    return { level: "danger", label: "추격 의심", note: "QQQ 200일선 대비 +15% 이상 신규 레버리지 매수는 금지 원칙입니다." };
+  }
+  if (entry.entry_type === "buy" && isLeveraged && !entry.reason) {
+    return { level: "watch", label: "근거 부족", note: "분할 단계와 실행 조건을 reason에 남기는 편이 좋습니다." };
+  }
+  if ((entry.entry_type === "buy" || entry.entry_type === "sell") && (!entry.price || !entry.quantity)) {
+    return { level: "watch", label: "체결 정보 부족", note: "체결가와 수량을 기록하면 사후 리뷰 정확도가 올라갑니다." };
+  }
+  return { level: "ok", label: "양호", note: "기록상 핵심 위반은 보이지 않습니다." };
+}
+
+export function ManagementPage() {
+  const navigate = useNavigate();
+  const { configured, user } = useAuth();
+  const initialSettings = useMemo(() => loadUserSettings(), []);
+  const [strategies, setStrategies] = useState<ManagedStrategy[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [guide, setGuide] = useState<ManagedGuide | null>(null);
+  const [adjustmentAdvice, setAdjustmentAdvice] = useState<AdjustmentAdvice | null>(null);
+  const [contributionAdvice, setContributionAdvice] = useState<ContributionAdvice | null>(null);
+  const [selectedContributionPlanId, setSelectedContributionPlanId] = useState("balanced");
+  const [targetCashRatio, setTargetCashRatio] = useState(initialSettings.targetCashRatio);
+  const [monthlyContribution, setMonthlyContribution] = useState(initialSettings.monthlyContribution);
+  const [payDay, setPayDay] = useState(initialSettings.payDay);
+  const [usdKrwRate, setUsdKrwRate] = useState(initialSettings.usdKrwRate);
+  const [manualCashUsd, setManualCashUsd] = useState(0);
+  const [fxStatus, setFxStatus] = useState("수동 환율");
+  const [liveQuotes, setLiveQuotes] = useState<Record<string, QuoteResponse>>({});
+  const [quoteStatus, setQuoteStatus] = useState("현재가를 불러오기 전입니다.");
+  const [dataReliability, setDataReliability] = useState<DataReliabilityResponse | null>(null);
+  const [dataReliabilityStatus, setDataReliabilityStatus] = useState("데이터 신뢰도 점검 전입니다.");
+  const [marketStatus, setMarketStatus] = useState("QQQ 시장 지표는 저장된 스냅샷 기준입니다.");
+  const [status, setStatus] = useState("채택한 전략을 불러오는 중입니다.");
+  const [activeTab, setActiveTab] = useState<ManageTab>("overview");
+  const [draft, setDraft] = useState({
+    entry_type: "note" as JournalEntry["entry_type"],
+    symbol: "TQQQ",
+    amount: 0,
+    quantity: 0,
+    price: 0,
+    reason: "",
+    mood: "neutral",
+    note: "",
+  });
+
+  const selected = useMemo(
+    () => guide?.strategy ?? strategies.find((strategy) => strategy.id === selectedId) ?? strategies[0],
+    [guide, selectedId, strategies],
+  );
+  const manualCashKrw = manualCashUsd > 0 ? manualCashUsd * usdKrwRate : null;
+
+  useEffect(() => {
+    localStorage.setItem(
+      userSettingsKey,
+      JSON.stringify({ targetCashRatio, monthlyContribution, payDay, usdKrwRate }),
+    );
+  }, [monthlyContribution, payDay, targetCashRatio, usdKrwRate]);
+
+  const executionRows = useMemo(() => {
+    if (!selected) return [];
+    const targetMap = new Map(selected.plan.allocations.map((allocation) => [allocation.symbol, allocation]));
+    const cashAllocation =
+      targetMap.get("CASH") ?? selected.plan.allocations.find((allocation) => isCashLikeSymbol(allocation.symbol));
+    const executed = new Map<string, { amount: number; quantity: number; symbols: Set<string> }>();
+    let spentAmount = 0;
+    selected.journal.forEach((entry) => {
+      if (entry.entry_type !== "buy" && entry.entry_type !== "sell" && entry.entry_type !== "rebalance") return;
+      const symbol = executionBucketSymbol(entry.symbol || "CASH", selected.plan.allocations);
+      const current = executed.get(symbol) ?? { amount: 0, quantity: 0, symbols: new Set<string>() };
+      const sign = entry.entry_type === "sell" ? -1 : 1;
+      spentAmount += sign * (entry.amount || 0);
+      current.amount += sign * (entry.amount || 0);
+      current.quantity += sign * (entry.quantity || 0);
+      if (entry.symbol) current.symbols.add(entry.symbol.toUpperCase());
+      executed.set(symbol, current);
+    });
+    const autoIdleCash = Math.max(selected.total_capital - spentAmount, 0);
+    const cashRowAmount = manualCashKrw ?? autoIdleCash;
+    const symbols = Array.from(new Set([...targetMap.keys(), ...executed.keys(), ...(cashRowAmount > 0 ? ["CASH"] : [])]));
+    return symbols.map((symbol) => {
+      const directAllocation = targetMap.get(symbol);
+      const isCashRow = symbol === "CASH";
+      const isCashLikeRow = isCashLikeSymbol(symbol);
+      const allocationForTarget = directAllocation ?? (isCashLikeRow ? cashAllocation : undefined);
+      const actual = executed.get(symbol) ?? { amount: 0, quantity: 0, symbols: new Set<string>() };
+      const targetAmount = allocationForTarget?.target_amount ?? 0;
+      const executionSymbol = Array.from(actual.symbols)[0] ?? symbol;
+      const quote = liveQuotes[executionSymbol] ?? liveQuotes[symbol];
+      const executedAmount = isCashRow ? cashRowAmount : Math.max(actual.amount, 0);
+      const currentValue = isCashRow
+        ? cashRowAmount
+        : actual.quantity > 0 && quote && isUsdAsset(executionSymbol)
+        ? actual.quantity * quote.price * usdKrwRate
+        : actual.amount;
+      const progressPct = targetAmount > 0 ? (executedAmount / targetAmount) * 100 : 0;
+      const currentWeight = selected.total_capital > 0 ? (currentValue / selected.total_capital) * 100 : 0;
+      const row = {
+        symbol,
+        executionSymbol,
+        role: directAllocation?.role ?? (isCashLikeRow ? "현금성 대기자산" : "기록 기반 자산"),
+        targetAmount,
+        executedAmount,
+        quantity: Math.max(actual.quantity, 0),
+        currentValue: Math.max(currentValue, 0),
+        progressPct,
+        currentWeight,
+      };
+      return {
+        ...row,
+        stage: executionStage(row, selected.plan.buy_plan),
+        nextHint: nextExecutionHint(row, guide),
+      };
+    });
+  }, [guide, liveQuotes, manualCashKrw, selected, usdKrwRate]);
+
+  const cashStatus = useMemo(() => {
+    if (!selected) {
+      return {
+        spentAmount: 0,
+        growthInvested: 0,
+        cashLikeValue: 0,
+        idleCash: 0,
+        pendingSplitAmount: 0,
+        minimumCashBuffer: 0,
+        suggestedSgovAmount: 0,
+        cashReserveRatio: 0,
+        autoIdleCash: 0,
+      };
+    }
+    let spentAmount = 0;
+    let growthInvested = 0;
+    let cashLikeValue = 0;
+    selected.journal.forEach((entry) => {
+      if (entry.entry_type !== "buy" && entry.entry_type !== "sell" && entry.entry_type !== "rebalance") return;
+      const symbol = entry.symbol.toUpperCase();
+      const sign = entry.entry_type === "sell" ? -1 : 1;
+      const amount = sign * (entry.amount || 0);
+      spentAmount += amount;
+      if (isCashLikeSymbol(symbol)) {
+        const quote = liveQuotes[symbol];
+        const value = entry.quantity > 0 && quote ? entry.quantity * quote.price * usdKrwRate : entry.amount;
+        cashLikeValue += sign * value;
+      } else {
+        growthInvested += amount;
+      }
+    });
+    const autoIdleCash = Math.max(selected.total_capital - spentAmount, 0);
+    const idleCash = manualCashKrw ?? autoIdleCash;
+    const pendingSplitAmount = guide?.execution_plan
+      .filter((step) => step.side === "buy" && step.status !== "done")
+      .reduce((sum, step) => sum + step.amount, 0) ?? 0;
+    const minimumCashBuffer = Math.max(pendingSplitAmount, selected.total_capital * 0.1);
+    const suggestedSgovAmount = Math.max(idleCash - minimumCashBuffer, 0);
+    const cashReserveRatio = selected.total_capital > 0 ? ((idleCash + cashLikeValue) / selected.total_capital) * 100 : 0;
+    return {
+      spentAmount,
+      growthInvested,
+      cashLikeValue,
+      idleCash,
+      pendingSplitAmount,
+      minimumCashBuffer,
+      suggestedSgovAmount,
+      cashReserveRatio,
+      autoIdleCash,
+    };
+  }, [guide, liveQuotes, manualCashKrw, selected, usdKrwRate]);
+
+  const cashLedger = useMemo(() => {
+    if (!selected) {
+      return {
+        entries: [] as JournalEntry[],
+        deposits: 0,
+        fx: 0,
+        transfers: 0,
+        cashLikeBuys: 0,
+        cashLikeSells: 0,
+        growthBuys: 0,
+        growthSells: 0,
+      };
+    }
+    const entries = selected.journal.filter((entry) => {
+      const symbol = entry.symbol.toUpperCase();
+      return (
+        entry.entry_type === "deposit" ||
+        entry.entry_type === "fx" ||
+        entry.entry_type === "cash_transfer" ||
+        (["buy", "sell", "rebalance"].includes(entry.entry_type) && isCashLikeSymbol(symbol))
+      );
+    });
+    const summary = {
+      deposits: 0,
+      fx: 0,
+      transfers: 0,
+      cashLikeBuys: 0,
+      cashLikeSells: 0,
+      growthBuys: 0,
+      growthSells: 0,
+    };
+    selected.journal.forEach((entry) => {
+      const amount = entry.amount || 0;
+      const symbol = entry.symbol.toUpperCase();
+      if (entry.entry_type === "deposit") summary.deposits += amount;
+      if (entry.entry_type === "fx") summary.fx += amount;
+      if (entry.entry_type === "cash_transfer") summary.transfers += amount;
+      if (entry.entry_type === "buy" || entry.entry_type === "rebalance") {
+        if (isCashLikeSymbol(symbol)) summary.cashLikeBuys += amount;
+        else summary.growthBuys += amount;
+      }
+      if (entry.entry_type === "sell") {
+        if (isCashLikeSymbol(symbol)) summary.cashLikeSells += amount;
+        else summary.growthSells += amount;
+      }
+    });
+    return { entries, ...summary };
+  }, [selected]);
+
+  const riskBudget = useMemo(() => {
+    if (!selected) return [];
+    const leverageRatio = allocationRatioOf(selected, ["TQQQ", "QLD"]);
+    const tqqqRatio = allocationRatioOf(selected, ["TQQQ"]);
+    const cashRatio = allocationRatioOf(selected, ["CASH", "SGOV", "BIL"]);
+    const largestReadyStep = guide?.execution_plan
+      .filter((step) => step.status === "ready")
+      .reduce((max, step) => Math.max(max, step.amount), 0) ?? 0;
+    const distance = (selected.market.qqq_close / selected.market.qqq_sma200 - 1) * 100;
+    return [
+      {
+        title: "레버리지 총량",
+        value: `${leverageRatio.toFixed(1)}%`,
+        limit: "권장 60% 이하",
+        level: leverageRatio > 70 ? "danger" : leverageRatio > 60 ? "watch" : "ok",
+      },
+      {
+        title: "TQQQ 단일 비중",
+        value: `${tqqqRatio.toFixed(1)}%`,
+        limit: "권장 50% 이하",
+        level: tqqqRatio > 60 ? "danger" : tqqqRatio > 50 ? "watch" : "ok",
+      },
+      {
+        title: "현금성 대기",
+        value: `${cashRatio.toFixed(1)}%`,
+        limit: distance >= 15 ? "과열권 30~35% 권장" : "최소 15~25%",
+        level: cashRatio < 15 ? "danger" : cashRatio < 25 && distance >= 8 ? "watch" : "ok",
+      },
+      {
+        title: "1회 실행 한도",
+        value: formatKrw(largestReadyStep),
+        limit: `원금 10% ${formatKrw(selected.total_capital * 0.1)}`,
+        level: largestReadyStep > selected.total_capital * 0.1 ? "danger" : largestReadyStep > selected.total_capital * 0.06 ? "watch" : "ok",
+      },
+      {
+        title: "QQQ 200일선",
+        value: formatPct(distance),
+        limit: "0% 아래 신규매수 금지",
+        level: distance <= 0 ? "danger" : distance >= 15 ? "watch" : "ok",
+      },
+      {
+        title: "대기재원",
+        value: formatKrw(cashStatus.idleCash + cashStatus.cashLikeValue),
+        limit: `미집행 계획 ${formatKrw(cashStatus.pendingSplitAmount)}`,
+        level: cashStatus.idleCash + cashStatus.cashLikeValue < cashStatus.pendingSplitAmount * 0.7 ? "watch" : "ok",
+      },
+    ];
+  }, [cashStatus, guide, selected]);
+
+  const executionReview = useMemo(() => {
+    if (!selected) return { score: 0, entries: [] as { entry: JournalEntry; review: ReturnType<typeof reviewEntry> }[], summary: "전략이 선택되지 않았습니다." };
+    const entries = latestTradeEntries(selected).map((entry) => ({ entry, review: reviewEntry(entry) }));
+    const danger = entries.filter((item) => item.review.level === "danger").length;
+    const watch = entries.filter((item) => item.review.level === "watch").length;
+    const score = Math.max(0, 100 - danger * 35 - watch * 12);
+    const summary = entries.length
+      ? danger
+        ? "최근 실행 기록에 규칙 위반 가능성이 있습니다."
+        : watch
+        ? "최근 실행 기록은 대체로 양호하지만 보강할 기록이 있습니다."
+        : "최근 실행 기록은 현재 규칙과 잘 맞습니다."
+      : "아직 매수/매도/리밸런싱 실행 기록이 없습니다.";
+    return { score, entries, summary };
+  }, [selected]);
+
+  const reloadCoach = useMemo(() => {
+    if (!selected) return null;
+    const tqqqAllocation = selected.plan.allocations.find((allocation) => allocation.symbol === "TQQQ");
+    if (!tqqqAllocation) return null;
+    const tqqqRow = executionRows.find((row) => row.symbol === "TQQQ");
+    const progressPct = tqqqRow?.progressPct ?? 0;
+    const distance = (selected.market.qqq_close / selected.market.qqq_sma200 - 1) * 100;
+    const isThirdDone = progressPct >= 95;
+    const targetGap = Math.max(tqqqAllocation.target_amount - (tqqqRow?.executedAmount ?? 0), 0);
+    const readyBuy = guide?.execution_plan.find((step) => step.side === "buy" && step.symbol === "TQQQ" && step.status === "ready");
+    const executableAmount = readyBuy ? Math.min(readyBuy.amount, targetGap || readyBuy.amount) : 0;
+    const idleCashUse = Math.min(cashStatus.idleCash, executableAmount);
+    const shortage = Math.max(executableAmount - idleCashUse, 0);
+    const sgovSellNeed = Math.min(cashStatus.cashLikeValue, shortage);
+    const remainingShortage = Math.max(shortage - sgovSellNeed, 0);
+    let verdict: "ok" | "watch" | "danger" = "watch";
+    let headline = "3차 이후 추가 TQQQ 매수는 대기입니다.";
+    const reasons: string[] = [];
+
+    if (distance <= 0) {
+      verdict = "danger";
+      headline = "QQQ가 200일선 아래라 추가 TQQQ 매수는 금지입니다.";
+      reasons.push("200일선 아래에서는 SGOV/CASH를 공격 재원으로 전환하지 않습니다.");
+    } else if (distance >= 15) {
+      verdict = "danger";
+      headline = "QQQ 200일선 이격이 커서 3차 이후 추가매수는 금지입니다.";
+      reasons.push("3차 완료 여부와 관계없이 +15% 이상 구간에서는 눌림 없는 재장전을 막습니다.");
+    } else if (!isThirdDone) {
+      verdict = "watch";
+      headline = "아직 기존 분할매수 사이클이 끝나지 않았습니다.";
+      reasons.push("추가 TQQQ 매수보다 1~3차 원래 규칙을 먼저 따릅니다.");
+    } else if (targetGap < selected.total_capital * 0.02) {
+      verdict = "watch";
+      headline = "3차 완료 후 목표 TQQQ 비중이 거의 찼습니다.";
+      reasons.push("새 추가금이나 전략 버전 변경으로 목표금액이 늘기 전까지 추가매수하지 않습니다.");
+    } else if (distance <= 5 || readyBuy) {
+      verdict = "ok";
+      headline = "3차 이후 재장전 검토가 가능합니다.";
+      reasons.push("목표금액 대비 미달분이 있고 QQQ 이격도가 완화되어 있습니다.");
+    } else {
+      verdict = "watch";
+      headline = "3차 이후 재장전은 더 깊은 눌림을 기다립니다.";
+      reasons.push("QQQ가 200일선 대비 +5%를 넘는 동안에는 SGOV를 서둘러 공격 재원으로 바꾸지 않습니다.");
+    }
+
+    const fundingGuide = executableAmount > 0
+      ? [
+          `실행 후보 금액: ${formatKrw(executableAmount)}`,
+          `미사용 현금 우선 사용: ${formatKrw(idleCashUse)}`,
+          sgovSellNeed > 0 ? `부족분은 SGOV/BIL에서 최대 ${formatKrw(sgovSellNeed)} 매도 후 사용` : "미사용 현금만으로 실행 가능",
+          remainingShortage > 0 ? `아직 부족한 금액 ${formatKrw(remainingShortage)}은 추가 입금 전까지 대기` : "재원 부족 없음",
+        ]
+      : [
+          "현재는 실행 후보 금액이 없습니다.",
+          "SGOV/BIL은 매수 조건이 켜질 때까지 현금성 대기자산으로 유지합니다.",
+        ];
+
+    return {
+      verdict,
+      headline,
+      isThirdDone,
+      progressPct,
+      targetGap,
+      distance,
+      readyBuy,
+      reasons,
+      fundingGuide,
+    };
+  }, [cashStatus.cashLikeValue, cashStatus.idleCash, executionRows, guide, selected]);
+
+  useEffect(() => {
+    void loadStrategies();
+    void loadFxRate();
+    void loadDataReliability();
+  }, []);
+
+  useEffect(() => {
+    if (selectedId) void loadGuide(selectedId);
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (selected) void loadLiveQuotes(selected);
+  }, [selected?.id, usdKrwRate]);
+
+  async function loadStrategies() {
+    try {
+      const next = await fetchJson<ManagedStrategy[]>("/managed-strategies");
+      setStrategies(next);
+      if (next[0] && !selectedId) setSelectedId(next[0].id);
+      setStatus(next.length ? "채택한 전략을 불러왔습니다." : "아직 채택한 전략이 없습니다. 전략 수립 화면에서 먼저 채택하세요.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "전략 목록을 불러오지 못했습니다.");
+    }
+  }
+
+  async function importLocalStrategies() {
+    if (!user) {
+      setStatus("로그인 후 기존 데이터를 가져올 수 있습니다.");
+      return;
+    }
+    setStatus("기존 로컬 전략 데이터를 내 계정으로 가져오는 중입니다...");
+    try {
+      const next = await fetchJson<ManagedStrategy[]>("/managed-strategies/import-local", {
+        method: "POST",
+      });
+      setStrategies(next);
+      setSelectedId(next[0]?.id ?? "");
+      setStatus(`${next.length}개 전략을 내 계정 저장소에서 불러왔습니다.`);
+      if (next[0]) await loadGuide(next[0].id);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "기존 데이터 가져오기에 실패했습니다.");
+    }
+  }
+
+  async function loadGuide(id: string) {
+    try {
+      const next = await fetchJson<ManagedGuide>(`/managed-strategies/${id}/guide`);
+      setGuide(next);
+      setAdjustmentAdvice(null);
+      setContributionAdvice(null);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "전략 가이드를 불러오지 못했습니다.");
+    }
+  }
+
+  async function loadFxRate() {
+    try {
+      const fx = await fetchJson<FxRate>("/market/fx/usd-krw");
+      setUsdKrwRate(Number(fx.rate.toFixed(2)));
+      setFxStatus(`${fx.provider} · ${fx.freshness} · ${fx.as_of}`);
+    } catch (error) {
+      setFxStatus(error instanceof Error ? `환율 갱신 실패: ${error.message}` : "환율 갱신 실패");
+    }
+  }
+
+  async function loadDataReliability() {
+    try {
+      const next = await fetchJson<DataReliabilityResponse>("/market/reliability?symbols=QQQ&symbols=TQQQ&symbols=QLD&symbols=SGOV");
+      setDataReliability(next);
+      const qqq = next.items.find((item) => item.symbol === "QQQ");
+      setDataReliabilityStatus(qqq ? `QQQ 데이터 신뢰도 ${qqq.score}점 · ${qqq.message}` : "데이터 신뢰도 점검 완료");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      setDataReliability(null);
+      if (message.includes("404")) {
+        setDataReliabilityStatus(
+          "데이터 신뢰도 API를 찾지 못했습니다. 현재 실행 중인 FastAPI 서버가 최신 코드가 아닐 수 있으니 API 서버를 재시작한 뒤 다시 갱신하세요. 임시로 저장된 QQQ 지표 기준 판단만 사용합니다.",
+        );
+        return;
+      }
+      setDataReliabilityStatus(`데이터 신뢰도 점검 실패: ${message}`);
+    }
+  }
+
+  async function loadLiveQuotes(strategy: ManagedStrategy) {
+    const symbols = Array.from(new Set([
+      "QQQ",
+      "QQQM",
+      "SGOV",
+      ...strategy.plan.allocations
+        .map((allocation) => allocation.symbol.toUpperCase())
+        .filter((symbol) => isUsdAsset(symbol)),
+    ]));
+    setQuoteStatus("현재가를 갱신하는 중입니다.");
+    try {
+      const settled = await Promise.allSettled(
+        symbols.map(async (symbol) => [symbol, await fetchJson<QuoteResponse>(`/market/quote/${symbol}`)] as const),
+      );
+      const quotes = Object.fromEntries(
+        settled
+          .filter((item): item is PromiseFulfilledResult<readonly [string, QuoteResponse]> => item.status === "fulfilled")
+          .map((item) => item.value),
+      );
+      const failed = symbols.filter((symbol) => !quotes[symbol]);
+      setLiveQuotes(quotes);
+      setQuoteStatus(
+        failed.length
+          ? `일부 현재가 갱신 실패: ${failed.join(", ")}`
+          : `현재가 갱신 완료: ${new Date().toLocaleTimeString("ko-KR")}`,
+      );
+    } catch (error) {
+      setQuoteStatus(error instanceof Error ? `현재가 갱신 실패: ${error.message}` : "현재가 갱신 실패");
+    }
+  }
+
+  async function refreshMarketSnapshot() {
+    if (!selected) return;
+    setMarketStatus("QQQ 20/50/200일선과 20일 고점을 갱신하는 중입니다.");
+    try {
+      const history = await fetchJson<HistoryResponse>("/market/history/QQQ?limit=1200");
+      if (!history.sma20 || !history.sma50 || !history.sma200 || !history.high20) {
+        throw new Error("QQQ 이동평균 계산에 필요한 일봉 데이터가 부족합니다.");
+      }
+      const market = {
+        qqq_close: history.latest.close,
+        qqq_sma20: history.sma20,
+        qqq_sma50: history.sma50,
+        qqq_sma200: history.sma200,
+        qqq_high20: history.high20,
+        as_of: history.latest.date,
+      };
+      const updated = await fetchJson<ManagedStrategy>(`/managed-strategies/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ market }),
+      });
+      setStrategies((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setGuide((current) => (current ? { ...current, strategy: updated } : current));
+      await loadGuide(updated.id);
+      setMarketStatus(
+        `QQQ 지표 갱신 완료: ${history.latest.date} · 종가 ${formatUsd(history.latest.close)} · 20일선 ${formatUsd(history.sma20)} · 50일선 ${formatUsd(history.sma50)} · 200일선 ${formatUsd(history.sma200)}`,
+      );
+      setStatus("최신 QQQ 지표를 반영해 분할 실행 계획을 다시 계산했습니다.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "QQQ 시장 지표 갱신에 실패했습니다.";
+      setMarketStatus(message);
+      setStatus(message);
+    }
+  }
+
+  async function requestAdjustmentAdvice() {
+    if (!selected) return;
+    try {
+      const advice = await fetchJson<AdjustmentAdvice>(`/managed-strategies/${selected.id}/adjustment-advice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target_cash_ratio: targetCashRatio,
+          note: `현금 비중을 ${targetCashRatio}%로 조정하고 싶습니다.`,
+        }),
+      });
+      setAdjustmentAdvice(advice);
+      setStatus(advice.headline);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "전략 조정 조언을 불러오지 못했습니다.");
+    }
+  }
+
+  async function applyAdjustmentAdvice() {
+    if (!selected || !adjustmentAdvice) return;
+    try {
+      const updated = await fetchJson<ManagedStrategy>(`/managed-strategies/${selected.id}/apply-adjustment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target_cash_ratio: targetCashRatio,
+          note: `현금 비중 ${targetCashRatio}% 조정안을 적용합니다.`,
+          accepted_headline: adjustmentAdvice.headline,
+        }),
+      });
+      setStrategies((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setGuide((current) => current ? { ...current, strategy: updated } : current);
+      setAdjustmentAdvice(null);
+      setStatus(`조정안이 v${updated.version}으로 적용됐습니다.`);
+      await loadGuide(updated.id);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "조정안 적용에 실패했습니다.");
+    }
+  }
+
+  async function requestContributionAdvice() {
+    if (!selected) return;
+    try {
+      const advice = await fetchJson<ContributionAdvice>(`/managed-strategies/${selected.id}/contribution-advice`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contribution_amount: monthlyContribution,
+          pay_day: payDay,
+          note: `매달 ${payDay}일 월급 중 ${monthlyContribution.toLocaleString("ko-KR")}원을 추가 투입합니다.`,
+        }),
+      });
+      setContributionAdvice(advice);
+      setSelectedContributionPlanId(advice.recommended_plan_id || advice.plans[0]?.id || "balanced");
+      setStatus(advice.headline);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "추가금 코칭을 불러오지 못했습니다.");
+    }
+  }
+
+  async function applyContributionAdvice() {
+    if (!selected || !contributionAdvice) return;
+    try {
+      const updated = await fetchJson<ManagedStrategy>(`/managed-strategies/${selected.id}/apply-contribution`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contribution_amount: monthlyContribution,
+          pay_day: payDay,
+          selected_plan_id: selectedContributionPlanId,
+          accepted_headline: contributionAdvice.plans.find((plan) => plan.id === selectedContributionPlanId)?.headline ?? contributionAdvice.headline,
+          note: "월급 추가금을 총 운용자본과 미사용 현금에 반영합니다.",
+        }),
+      });
+      setStrategies((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setGuide((current) => (current ? { ...current, strategy: updated } : current));
+      setContributionAdvice(null as unknown as ContributionAdvice);
+      setStatus(`추가금이 v${updated.version} 전략에 반영됐습니다. 실행 기록에서 실제 주문을 남겨주세요.`);
+      await loadGuide(updated.id);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "추가금 반영에 실패했습니다.");
+    }
+  }
+
+  function prepareExecution(step: ExecutionStep) {
+    const quote = liveQuotes[step.symbol];
+    const estimatedQuantity = quote && usdKrwRate ? Number((step.amount / (quote.price * usdKrwRate)).toFixed(4)) : 0;
+    setDraft({
+      ...draft,
+      entry_type: step.side,
+      symbol: step.symbol,
+      amount: Math.round(step.amount),
+      quantity: estimatedQuantity,
+      price: quote?.price ?? 0,
+      reason: `${step.step} ${step.side === "buy" ? "분할매수" : "분할매도"}: ${step.trigger}`,
+      note: step.reason,
+    });
+    setStatus(`${step.step} 기록 초안을 만들었습니다. 실제 실행 전 금액과 가격을 확인하세요.`);
+  }
+
+  function updateExecutionPrice(next: Partial<typeof draft>) {
+    const nextDraft = { ...draft, ...next };
+    if (isUsdAsset(nextDraft.symbol) && nextDraft.price > 0 && nextDraft.quantity > 0) {
+      nextDraft.amount = Math.round(nextDraft.price * nextDraft.quantity * usdKrwRate);
+    }
+    setDraft(nextDraft);
+  }
+
+  function prepareSgovParking() {
+    const amount = Math.round(cashStatus.suggestedSgovAmount);
+    const quote = liveQuotes.SGOV;
+    const quantity = quote && usdKrwRate ? Number((amount / (quote.price * usdKrwRate)).toFixed(4)) : 0;
+    setDraft({
+      ...draft,
+      entry_type: "buy",
+      symbol: "SGOV",
+      amount,
+      quantity,
+      price: quote?.price ?? 0,
+      reason: "분할매수 대기 현금 SGOV 운용",
+      note: "TQQQ 추가 분할매수 조건이 오기 전까지 대기 현금 일부를 초단기 국채 ETF로 운용하기 위한 기록입니다. 실제 주문 후 체결가와 수량을 확인하세요.",
+    });
+    setActiveTab("journal");
+    setStatus("SGOV 대기자금 기록 초안을 만들었습니다. 실제 주문 후 체결가와 수량을 확인하고 저장하세요.");
+  }
+
+  async function addJournal() {
+    if (!selected) return;
+    try {
+      const updated = await fetchJson<ManagedStrategy>(`/managed-strategies/${selected.id}/journal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      setStrategies((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setGuide((current) => current ? { ...current, strategy: updated } : current);
+      setDraft({ ...draft, amount: 0, quantity: 0, price: 0, reason: "", note: "" });
+      setStatus("전략 기록을 저장했습니다.");
+      await loadGuide(updated.id);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "전략 기록 저장에 실패했습니다.");
+    }
+  }
+
+  async function deleteJournal(entryId: string) {
+    if (!selected) return;
+    if (!window.confirm("이 기록을 삭제할까요?")) return;
+    try {
+      const updated = await fetchJson<ManagedStrategy>(`/managed-strategies/${selected.id}/journal/${entryId}`, {
+        method: "DELETE",
+      });
+      setStrategies((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setGuide((current) => current ? { ...current, strategy: updated } : current);
+      setStatus("전략 기록을 삭제했습니다.");
+      await loadGuide(updated.id);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "전략 기록 삭제에 실패했습니다.");
+    }
+  }
+
+  function allocationRatio(strategy: ManagedStrategy, symbol: string) {
+    return strategy.plan.allocations.find((allocation) => allocation.symbol === symbol)?.target_ratio ?? 0;
+  }
+
+  function primaryBacktestStrategy(strategy: ManagedStrategy): BacktestStrategy {
+    if (allocationRatio(strategy, "TQQQ") > 0) return "tqqq_200ma";
+    if (allocationRatio(strategy, "QLD") > 0) return "qld_200ma";
+    return "qqq_buy_hold";
+  }
+
+  function sendToTestLab(strategy: ManagedStrategy) {
+    localStorage.setItem("tqcoach.managedTestDraft", JSON.stringify({
+      source: "managed_strategy",
+      strategy_id: strategy.id,
+      version: strategy.version,
+      title: strategy.plan.title,
+      summary: strategy.plan.summary,
+      initial_capital: strategy.total_capital,
+      strategy: primaryBacktestStrategy(strategy),
+      tqqq_target_ratio: allocationRatio(strategy, "TQQQ"),
+      qld_target_ratio: allocationRatio(strategy, "QLD"),
+      cash_yield: 3,
+      projection_years: 3,
+      allocations: strategy.plan.allocations.map((allocation) => ({
+        symbol: allocation.symbol,
+        role: allocation.role,
+        target_ratio: allocation.target_ratio,
+        target_amount: allocation.target_amount,
+      })),
+    }));
+    navigate("/lab?source=managed");
+  }
+
+  return (
+    <section className="page-grid">
+      <div className="hero-panel manage">
+        <div>
+          <span className="section-label">Strategy Operations</span>
+          <h2>채택한 전략을 계속 관리합니다</h2>
+          <p>추천받은 전략을 실제 운용 계획으로 저장하고, 실행 기록과 준수율을 함께 점검합니다.</p>
+        </div>
+      </div>
+
+      <div className="content-grid">
+        <article className="panel span-4">
+          <PanelTitle icon={<BookOpenCheck size={18} />} title="내 전략" />
+          <p className="muted">{status}</p>
+          <div className="strategy-list">
+            {strategies.map((strategy) => (
+              <button className={strategy.id === selected?.id ? "selected" : ""} key={strategy.id} onClick={() => setSelectedId(strategy.id)}>
+                <strong>{strategy.plan.title}</strong>
+                <small>{formatDate(strategy.created_at)} 채택</small>
+              </button>
+            ))}
+          </div>
+          {configured && user ? (
+            <div className="import-local-card">
+              <strong>기존 데이터 이전</strong>
+              <small>로그인 전 JSON 저장소에 있던 전략을 현재 계정으로 복사합니다.</small>
+              <button type="button" onClick={importLocalStrategies}>
+                기존 데이터 가져오기
+              </button>
+            </div>
+          ) : null}
+        </article>
+
+        <article className="panel span-8">
+          <PanelTitle icon={<ClipboardCheck size={18} />} title="오늘의 운용 가이드" />
+          {guide && selected ? (
+            <>
+              <div className="manage-head">
+                <div>
+                  <span className="section-label">{selected.status}</span>
+                  <h2>{selected.plan.title}</h2>
+                  <small className="version-badge">v{selected.version}</small>
+                  <p>{selected.plan.summary}</p>
+                  <div className="hero-actions inline-test-actions">
+                    <button type="button" onClick={refreshMarketSnapshot}>
+                      <RefreshCw size={16} />
+                      QQQ 지표 갱신
+                    </button>
+                    <button type="button" onClick={() => sendToTestLab(selected)}>
+                      <FlaskConical size={16} />
+                      이 전략으로 테스트
+                    </button>
+                  </div>
+                  <small className="fx-status">
+                    {marketStatus} · 저장 기준 {selected.market.as_of} · QQQ {formatUsd(selected.market.qqq_close)}
+                    {selected.market.qqq_sma20 ? ` · 20일선 ${formatUsd(selected.market.qqq_sma20)}` : ""}
+                    {selected.market.qqq_sma50 ? ` · 50일선 ${formatUsd(selected.market.qqq_sma50)}` : ""}
+                    {selected.market.qqq_sma200 ? ` · 200일선 ${formatUsd(selected.market.qqq_sma200)}` : ""}
+                  </small>
+                </div>
+                <div className={`compliance-score ${guide.compliance_score < 60 ? "danger" : guide.compliance_score < 80 ? "watch" : ""}`}>
+                  <span>준수율</span>
+                  <strong>{guide.compliance_score}</strong>
+                </div>
+              </div>
+              <div className="action-band">{guide.current_action}</div>
+              <div className="issue-grid">
+                {guide.issues.map((issue) => (
+                  <div className={`issue-card ${issue.level}`} key={issue.title}>
+                    <strong>{issue.title}</strong>
+                    <small>{issue.detail}</small>
+                  </div>
+                ))}
+              </div>
+              <div className="check-grid">
+                {guide.checklist.map((item) => <label key={item}><input type="checkbox" />{item}</label>)}
+              </div>
+            </>
+          ) : (
+            <p className="muted">채택된 전략이 있으면 이곳에 상세 가이드가 표시됩니다.</p>
+          )}
+        </article>
+
+        {selected ? (
+          <article className="panel span-12 manage-tabs-panel">
+            <div className="manage-tabs">
+              {[
+                ["overview", "오늘의 판단"],
+                ["journal", "실행 기록"],
+                ["strategy", "내 전략"],
+              ].map(([id, label]) => (
+                <button
+                  className={activeTab === id ? "selected" : ""}
+                  key={id}
+                  onClick={() => setActiveTab(id as ManageTab)}
+                  type="button"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </article>
+        ) : null}
+
+        {activeTab === "overview" && selected ? (
+          <article className="panel span-12">
+            <PanelTitle icon={<Target size={18} />} title="오늘의 판단과 보유 현황" />
+            <div className="data-reliability-card">
+              <div>
+                <span className="section-label">Data Reliability</span>
+                <h3>판단 기준 데이터 점검</h3>
+                <p>
+                  TQQQ/QLD 실행 판단은 QQQ 일봉과 20/50/200일선 기준입니다.
+                  현재가와 환율은 주문 전 재확인용이며, 최종 체결가는 실행 기록에 직접 남깁니다.
+                </p>
+              </div>
+              <div className="reliability-grid">
+                {(() => {
+                  const freshness = marketDataFreshness(selected.market.as_of);
+                  const hasShortSignals = Boolean(selected.market.qqq_sma20 && selected.market.qqq_sma50 && selected.market.qqq_high20);
+                  const qqqReliability = dataReliability?.items.find((item) => item.symbol === "QQQ");
+                  return (
+                    <>
+                      <span className={qqqReliability?.status ?? freshness.level}>
+                        <small>QQQ 기준일</small>
+                        <strong>{qqqReliability?.latest_date ?? selected.market.as_of}</strong>
+                        <em>{qqqReliability ? `${qqqReliability.score}점 · ${qqqReliability.message}` : freshness.label}</em>
+                      </span>
+                      <span className={selected.market.qqq_sma200 ? "ok" : "danger"}>
+                        <small>200일선</small>
+                        <strong>{formatUsd(selected.market.qqq_sma200)}</strong>
+                        <em>{selected.market.qqq_sma200 ? "핵심 기준 사용 가능" : "필수 데이터 없음"}</em>
+                      </span>
+                      <span className={hasShortSignals ? "ok" : "watch"}>
+                        <small>20/50일·20일 고점</small>
+                        <strong>{hasShortSignals ? "완료" : "일부 없음"}</strong>
+                        <em>{hasShortSignals ? "분할매수 세부 조건 사용 가능" : "보수적 대체 기준 사용"}</em>
+                      </span>
+                      <span className="watch">
+                        <small>현재가/환율</small>
+                        <strong>{usdKrwRate.toLocaleString("ko-KR")}</strong>
+                        <em>{quoteStatus}</em>
+                      </span>
+                    </>
+                  );
+                })()}
+              </div>
+              {dataReliability ? (
+                <div className="reliability-assets">
+                  {dataReliability.items.map((item) => (
+                    <span className={item.status} key={item.symbol}>
+                      <strong>{item.symbol}</strong>
+                      <small>{item.score}점 · {item.latest_date} · {item.age_days}일 전</small>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">{dataReliabilityStatus}</p>
+              )}
+              <button type="button" onClick={loadDataReliability}>
+                <RefreshCw size={16} />
+                데이터 신뢰도 갱신
+              </button>
+            </div>
+            <div className="cash-command-card">
+              <div>
+                <span className="section-label">Cash Command</span>
+                <h3>남은 현금과 SGOV 대기자금</h3>
+                <p>
+                  실제 미사용 현금은 {formatKrw(cashStatus.idleCash)}이고, SGOV/BIL/CASH 같은 현금성 보유를 합치면
+                  전체 원금 대비 {cashStatus.cashReserveRatio.toFixed(1)}%입니다.
+                </p>
+              </div>
+              <div className="cash-metrics">
+                <span><small>미사용 현금</small><strong>{formatKrw(cashStatus.idleCash)}</strong></span>
+                <span><small>현금성 ETF</small><strong>{formatKrw(cashStatus.cashLikeValue)}</strong></span>
+                <span><small>남은 분할매수</small><strong>{formatKrw(cashStatus.pendingSplitAmount)}</strong></span>
+                <span><small>SGOV 추천</small><strong>{formatKrw(cashStatus.suggestedSgovAmount)}</strong></span>
+              </div>
+              <div className="cash-actions">
+                <label>
+                  달러 현금 잔액
+                  <input
+                    type="number"
+                    min={0}
+                    value={manualCashUsd}
+                    onChange={(event) => setManualCashUsd(Number(event.target.value))}
+                    placeholder="예: 360"
+                  />
+                </label>
+                <small>
+                  입력하지 않으면 기록 기준 자동 현금 {formatKrw(cashStatus.autoIdleCash)}을 사용합니다.
+                  입력 시 {formatUsdFromKrw(cashStatus.idleCash, usdKrwRate)} 기준으로 CASH 행에 반영됩니다.
+                </small>
+                <p>
+                  남은 분할매수 예정액과 최소 현금 버퍼를 제외하고 여유가 있는 현금만 SGOV 대기 후보로 계산합니다.
+                  매수 조건이 오면 SGOV를 매도해 TQQQ/QLD 분할매수 재원으로 쓰는 전제입니다.
+                </p>
+                <button type="button" onClick={prepareSgovParking} disabled={cashStatus.suggestedSgovAmount < 10000}>
+                  SGOV 대기 기록 초안
+                </button>
+              </div>
+            </div>
+            <div className="risk-budget-card">
+              <div>
+                <span className="section-label">Risk Budget</span>
+                <h3>전략 한도 점검</h3>
+                <p>공격적인 운용이어도 레버리지 총량, 현금성 대기, 1회 실행 한도는 매수 전 자동으로 확인합니다.</p>
+              </div>
+              <div className="risk-budget-grid">
+                {riskBudget.map((item) => (
+                  <span className={item.level} key={item.title}>
+                    <small>{item.title}</small>
+                    <strong>{item.value}</strong>
+                    <em>{item.limit}</em>
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="execution-summary-grid">
+              {executionRows.map((row) => (
+                <div className="execution-summary-card" key={row.symbol}>
+                  <div>
+                    <span className="section-label">{row.stage}</span>
+                    <h3>{row.symbol}{row.executionSymbol !== row.symbol ? ` (${row.executionSymbol})` : ""}</h3>
+                    <small>{row.role}</small>
+                  </div>
+                  <div className="progress-track">
+                    <span style={{ width: `${Math.min(Math.max(row.progressPct, 0), 120)}%` }} />
+                  </div>
+                  <div className="execution-summary-metrics">
+                    <span><small>목표</small><strong>{formatKrw(row.targetAmount)}</strong></span>
+                    <span><small>집행</small><strong>{formatKrw(row.executedAmount)}</strong></span>
+                    <span><small>진행률</small><strong>{row.progressPct.toFixed(1)}%</strong></span>
+                    <span><small>현재비중</small><strong>{row.currentWeight.toFixed(1)}%</strong></span>
+                  </div>
+                  <p>{row.nextHint}</p>
+                </div>
+              ))}
+            </div>
+          </article>
+        ) : null}
+
+        {activeTab === "overview" && guide && selected ? (
+          <article className="panel span-12">
+            <PanelTitle icon={<Target size={18} />} title="오늘 실행 기준" />
+            <div className="execution-grid">
+              {guide.execution_plan.map((step) => (
+                <div className={`execution-card ${step.status}`} key={`${step.side}-${step.step}`}>
+                  <div>
+                    <span className="section-label">{step.side === "buy" ? "분할매수" : "분할매도"}</span>
+                    <h3>{step.step} · {step.symbol}</h3>
+                    <p>{step.trigger_label || step.trigger}</p>
+                  </div>
+                  <div className="trigger-grid">
+                    <span><small>현재 QQQ</small><strong>{formatUsd(step.current_price)}</strong></span>
+                    <span><small>실행 기준</small><strong>{formatUsd(step.trigger_price)}</strong></span>
+                    <span><small>기준가 대비</small><strong>{step.distance_to_trigger_pct == null ? "-" : formatPct(step.distance_to_trigger_pct)}</strong></span>
+                  </div>
+                  <strong>{actionLabelWithCurrency(step.action_label, step.amount, step.symbol, usdKrwRate)}</strong>
+                  <small>{step.reason}</small>
+                  <button onClick={() => prepareExecution(step)} disabled={step.status !== "ready"}>
+                    기록 초안 만들기
+                  </button>
+                </div>
+              ))}
+            </div>
+          </article>
+        ) : null}
+
+        {activeTab === "strategy" && selected ? (
+          <article className="panel span-12 adjustment-coach">
+            <PanelTitle icon={<SlidersHorizontal size={18} />} title="현금 비중 조정 코치" />
+            <div className="adjustment-form">
+              <div>
+                <span className="section-label">What-if 조정</span>
+                <h3>원 규칙을 유지한 채 현금 비중을 바꾸면 어떤가요?</h3>
+                <p className="muted">예: 현금 39.4% 전략을 20%로 낮추고 싶을 때, 현재 QQQ 위치와 TQQQ 규칙을 기준으로 위험도를 점검합니다.</p>
+              </div>
+              <label>
+                목표 현금 %
+                <input type="number" min={0} max={80} value={targetCashRatio} onChange={(event) => setTargetCashRatio(Number(event.target.value))} />
+              </label>
+              <button className="primary" onClick={requestAdjustmentAdvice}>
+                <SlidersHorizontal size={16} />
+                조정 조언 받기
+              </button>
+            </div>
+            {adjustmentAdvice ? (
+              <div className={`adjustment-result ${adjustmentAdvice.verdict}`}>
+                <div>
+                  <span className="section-label">{adjustmentAdvice.verdict}</span>
+                  <h3>{adjustmentAdvice.headline}</h3>
+                  <p>{adjustmentAdvice.summary}</p>
+                </div>
+                <div className="adjustment-metrics">
+                  <span><small>현재 현금</small><strong>{adjustmentAdvice.current_cash_ratio.toFixed(1)}%</strong></span>
+                  <span><small>목표 현금</small><strong>{adjustmentAdvice.target_cash_ratio.toFixed(1)}%</strong></span>
+                  <span><small>권장 최소</small><strong>{adjustmentAdvice.minimum_cash_ratio.toFixed(1)}%</strong></span>
+                  <span><small>QQQ 이격</small><strong>{formatPct(adjustmentAdvice.qqq_distance_from_200ma)}</strong></span>
+                </div>
+                {adjustmentAdvice.issues.length ? <ListBlock title="주의할 점" items={adjustmentAdvice.issues} /> : null}
+                <ListBlock title="권장 액션" items={adjustmentAdvice.actions} />
+                <div className="adjustment-table">
+                  {adjustmentAdvice.suggested_allocations.map((allocation) => (
+                    <div key={allocation.symbol}>
+                      <strong>{allocation.symbol}</strong>
+                      <span>{allocation.current_ratio.toFixed(1)}% → {allocation.suggested_ratio.toFixed(1)}%</span>
+                      <em>{allocation.delta_ratio >= 0 ? "+" : ""}{allocation.delta_ratio.toFixed(1)}%</em>
+                      <small>{allocation.reason}</small>
+                    </div>
+                  ))}
+                </div>
+                <button className="primary" onClick={applyAdjustmentAdvice}>
+                  <Save size={16} />
+                  이 조정안 적용해서 v{(selected.version ?? 1) + 1}로 관리
+                </button>
+              </div>
+            ) : null}
+          </article>
+        ) : null}
+
+        {activeTab === "strategy" && selected ? (
+          <article className="panel span-12 adjustment-coach">
+            <PanelTitle icon={<Save size={18} />} title="월급 추가금 코치" />
+            <div className="adjustment-form">
+              <div>
+                <span className="section-label">Monthly Contribution</span>
+                <h3>매달 들어오는 추가금을 새 원금으로 반영합니다.</h3>
+                <p className="muted">추가금은 먼저 미사용 현금으로 잡고, 새 총자본 기준 목표금액과 현재 실행액의 차이를 계산합니다.</p>
+              </div>
+              <label>
+                매월 입금일
+                <input type="number" min={1} max={31} value={payDay} onChange={(event) => setPayDay(Number(event.target.value))} />
+              </label>
+              <label>
+                추가 투입금
+                <input type="number" min={0} step={100000} value={monthlyContribution} onChange={(event) => setMonthlyContribution(Number(event.target.value))} />
+              </label>
+              <button className="primary" onClick={requestContributionAdvice}>
+                <SlidersHorizontal size={16} />
+                추가금 코칭 받기
+              </button>
+            </div>
+            {contributionAdvice ? (() => {
+              const selectedPlan =
+                contributionAdvice.plans.find((plan) => plan.id === selectedContributionPlanId) ??
+                contributionAdvice.plans.find((plan) => plan.id === contributionAdvice.recommended_plan_id) ??
+                contributionAdvice.plans[0];
+              return selectedPlan ? (
+                <div className="adjustment-result ok">
+                  <div>
+                    <span className="section-label">Contribution Options</span>
+                    <h3>{selectedPlan.headline}</h3>
+                    <p>{selectedPlan.summary}</p>
+                  </div>
+                  <div className="strategy-toggle-list">
+                    {contributionAdvice.plans.map((plan) => (
+                      <button
+                        className={selectedPlan.id === plan.id ? "selected" : ""}
+                        key={plan.id}
+                        onClick={() => setSelectedContributionPlanId(plan.id)}
+                        type="button"
+                      >
+                        <strong>{plan.title}</strong>
+                        <small>{plan.risk_level} · 추천도 {plan.recommendation_score}</small>
+                        {plan.id === contributionAdvice.recommended_plan_id ? <em>추천</em> : null}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="adjustment-metrics">
+                    <span><small>현재 원금</small><strong>{formatKrw(selectedPlan.current_total_capital)}</strong></span>
+                    <span><small>추가금</small><strong>{formatKrw(selectedPlan.contribution_amount)}</strong></span>
+                    <span><small>새 원금</small><strong>{formatKrw(selectedPlan.new_total_capital)}</strong></span>
+                    <span><small>입금 후 현금</small><strong>{formatKrw(selectedPlan.available_cash_after_deposit)}</strong></span>
+                  </div>
+                  <ListBlock title="운용 원칙" items={selectedPlan.actions} />
+                  <div className="adjustment-table">
+                    {selectedPlan.allocations.map((allocation) => (
+                      <div key={`${selectedPlan.id}-${allocation.symbol}-${allocation.role}`}>
+                        <strong>{allocation.symbol}</strong>
+                        <span>{formatKrw(allocation.current_amount)} → 목표 {formatKrw(allocation.target_amount_after)}</span>
+                        <em>
+                          {allocation.action === "buy" ? "매수" : allocation.action === "wait" ? "대기" : allocation.action === "rebalance" ? "조정" : "유지"} {formatKrw(allocation.suggested_amount)}
+                        </em>
+                        <small>{allocation.reason}</small>
+                      </div>
+                    ))}
+                  </div>
+                  <button className="primary" onClick={applyContributionAdvice}>
+                    <Save size={16} />
+                    선택한 추가금 운용안을 v{(selected.version ?? 1) + 1} 전략에 반영
+                  </button>
+                </div>
+              ) : null;
+            })() : null}
+          </article>
+        ) : null}
+
+        {activeTab === "strategy" && selected?.version_history?.length ? (
+          <article className="panel span-12">
+            <PanelTitle icon={<History size={18} />} title="전략 버전 이력" />
+            <div className="version-list">
+              {[...selected.version_history].reverse().map((entry) => (
+                <div className="version-row" key={`${entry.version}-${entry.created_at}`}>
+                  <div>
+                    <strong>v{entry.version} · {entry.title}</strong>
+                    <small>{formatDate(entry.created_at)} · {entry.change_type}</small>
+                    {entry.note ? <p>{entry.note}</p> : null}
+                  </div>
+                  <div className="version-ratios">
+                    {entry.after_allocations.map((allocation) => (
+                      <span key={`${entry.version}-${allocation.symbol}`}>{allocation.symbol} {allocation.ratio.toFixed(1)}%</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
+        ) : null}
+
+        {(activeTab === "strategy" || activeTab === "journal") && selected ? (
+          <>
+            {activeTab === "strategy" ? (
+            <article className="panel span-6">
+              <PanelTitle icon={<ListChecks size={18} />} title="목표 비중과 원 규칙" />
+              <div className="currency-control">
+                <div>
+                  <span>미국 ETF 금액은 달러 기준으로 보고, 괄호 안에 원화 환산을 함께 표시합니다.</span>
+                  <small className="fx-status">{fxStatus}</small>
+                </div>
+                <label>
+                  USD/KRW
+                  <input type="number" value={usdKrwRate} onChange={(event) => setUsdKrwRate(Number(event.target.value))} />
+                </label>
+                <button type="button" onClick={loadFxRate}>
+                  <RefreshCw size={16} />
+                  환율 갱신
+                </button>
+                <button type="button" onClick={() => selected && loadLiveQuotes(selected)}>
+                  <RefreshCw size={16} />
+                  현재가 갱신
+                </button>
+              </div>
+              <div className="refresh-status">
+                <strong>{quoteStatus}</strong>
+                <small>QQQ는 전략 기준 자산으로 유지하되, 목표금액이 QQQ 1주보다 작으면 QQQM을 실행 대체 후보로 제시합니다.</small>
+              </div>
+              <table>
+                <tbody>
+                  {selected.plan.allocations.map((allocation) => (
+                    <tr key={allocation.symbol}>
+                      <td>
+                        <strong>{allocation.symbol}</strong>
+                        <small>{allocation.role}</small>
+                        <small className="policy-note">{allocationPolicy(allocation.symbol)} · {allocationPolicyDetail(allocation.symbol)}</small>
+                        <small className="execution-note">{allocationExecutionDetail(allocation, liveQuotes, usdKrwRate)}</small>
+                      </td>
+                      <td>{allocation.target_ratio.toFixed(1)}%</td>
+                      <td>
+                        {formatDualCurrency(allocation.target_amount, allocation.symbol, usdKrwRate)}
+                        {isUsdAsset(allocation.symbol) ? (
+                          <small>
+                            실행 후보 {executableSymbol(allocation, liveQuotes, usdKrwRate)}
+                            {liveQuotes[executableSymbol(allocation, liveQuotes, usdKrwRate)]
+                              ? ` · ${formatUsd(liveQuotes[executableSymbol(allocation, liveQuotes, usdKrwRate)].price)}`
+                              : ""}
+                          </small>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <RuleList title="분할매수 원칙" items={selected.plan.buy_plan} />
+              <RuleList title="분할매도 원칙" items={selected.plan.sell_plan} />
+            </article>
+            ) : null}
+
+            {activeTab === "journal" ? (
+            <>
+            <article className="panel span-12 execution-review-card">
+              <div>
+                <span className="section-label">Execution Review</span>
+                <h3>최근 실행 리뷰</h3>
+                <p>{executionReview.summary}</p>
+              </div>
+              <div className={`review-score ${executionReview.score < 60 ? "danger" : executionReview.score < 85 ? "watch" : "ok"}`}>
+                <span>리뷰 점수</span>
+                <strong>{executionReview.score}</strong>
+              </div>
+              {executionReview.entries.length ? (
+                <div className="review-entry-grid">
+                  {executionReview.entries.map(({ entry, review }) => (
+                    <div className={`review-entry ${review.level}`} key={entry.id}>
+                      <div>
+                        <strong>{journalTypeLabel(entry.entry_type)} · {entry.symbol}</strong>
+                        <small>{formatDate(entry.created_at)} · QQQ 200일선 대비 {formatPct(entry.qqq_distance_from_200ma)}</small>
+                      </div>
+                      <span>{review.label}</span>
+                      <p>{review.note}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">매수/매도/리밸런싱 기록을 남기면 자동 리뷰가 생성됩니다.</p>
+              )}
+            </article>
+
+            <article className="panel span-6">
+              <PanelTitle icon={<Save size={18} />} title="실행/판단 기록" />
+              <div className="journal-form">
+                <label>유형<select value={draft.entry_type} onChange={(event) => setDraft({ ...draft, entry_type: event.target.value as JournalEntry["entry_type"] })}><option value="note">메모</option><option value="deposit">입금</option><option value="fx">환전</option><option value="cash_transfer">현금 이동</option><option value="buy">매수</option><option value="sell">매도</option><option value="rebalance">리밸런싱</option><option value="rule_check">규칙 점검</option><option value="review">리뷰</option></select></label>
+                <label>종목<input value={draft.symbol} onChange={(event) => updateExecutionPrice({ symbol: event.target.value.toUpperCase() })} /></label>
+                <label>원화 금액<input type="number" value={draft.amount} onChange={(event) => setDraft({ ...draft, amount: Number(event.target.value) })} /></label>
+                <label>체결가(USD)<input type="number" value={draft.price} onChange={(event) => updateExecutionPrice({ price: Number(event.target.value) })} /></label>
+                <label>수량<input type="number" value={draft.quantity} onChange={(event) => updateExecutionPrice({ quantity: Number(event.target.value) })} /></label>
+                <div className="execution-fill span-2">
+                  <span>체결가와 수량을 입력하면 환율 {usdKrwRate.toLocaleString("ko-KR")}원 기준으로 원화 금액이 자동 계산됩니다.</span>
+                  {liveQuotes[draft.symbol] ? <button type="button" onClick={() => updateExecutionPrice({ price: liveQuotes[draft.symbol].price })}>현재가를 체결가로 입력</button> : null}
+                </div>
+                <label className="span-2">이유<input value={draft.reason} onChange={(event) => setDraft({ ...draft, reason: event.target.value })} placeholder="예: QQQ 200일선 위, 1차 분할 조건" /></label>
+                <label className="span-2">메모<textarea value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></label>
+                <button className="primary span-2" onClick={addJournal}><Save size={16} />기록 저장</button>
+              </div>
+            </article>
+
+            <article className="panel span-12">
+              <PanelTitle icon={<ListChecks size={18} />} title="현금 흐름 원장" />
+              <div className="cash-ledger-summary">
+                <span>
+                  <small>총 입금 기록</small>
+                  <strong>{formatKrw(cashLedger.deposits)}</strong>
+                </span>
+                <span>
+                  <small>환전 기록</small>
+                  <strong>{formatKrw(cashLedger.fx)}</strong>
+                </span>
+                <span>
+                  <small>SGOV/BIL 대기 매수</small>
+                  <strong>{formatKrw(cashLedger.cashLikeBuys)}</strong>
+                </span>
+                <span>
+                  <small>현금성 대기 매도</small>
+                  <strong>{formatKrw(cashLedger.cashLikeSells)}</strong>
+                </span>
+                <span>
+                  <small>현재 미집행 현금</small>
+                  <strong>{formatKrw(cashStatus.idleCash)}</strong>
+                </span>
+              </div>
+              {cashLedger.entries.length ? (
+                <div className="cash-ledger-list">
+                  {[...cashLedger.entries].reverse().map((entry) => (
+                    <div className="cash-ledger-row" key={entry.id}>
+                      <div>
+                        <strong>{journalTypeLabel(entry.entry_type)} · {entry.symbol || "CASH"}</strong>
+                        <small>{formatDate(entry.created_at)}</small>
+                      </div>
+                      <span>{entry.amount ? formatKrw(entry.amount) : "-"}</span>
+                      <p>{entry.reason || entry.note || "현금 흐름 기록"}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">아직 입금, 환전, 현금성 대기자산 이동 기록이 없습니다.</p>
+              )}
+            </article>
+
+            <article className="panel span-12">
+              <PanelTitle icon={<History size={18} />} title="전략 기록장" />
+              {selected.journal.length ? (
+                <table>
+                  <tbody>
+                    {[...selected.journal].reverse().map((entry) => (
+                      <tr key={entry.id}>
+                        <td><strong>{journalTypeLabel(entry.entry_type)}</strong><small>{formatDate(entry.created_at)}</small></td>
+                        <td>{entry.symbol || "-"}</td>
+                        <td>
+                          {entry.amount ? formatKrw(entry.amount) : "-"}
+                          {entry.price ? <small>{formatUsd(entry.price)} · {entry.quantity || 0}주</small> : null}
+                        </td>
+                        <td>{entry.reason || entry.note || "-"}</td>
+                        <td>{formatPct(entry.qqq_distance_from_200ma)}</td>
+                        <td>
+                          <button className="icon-danger" type="button" onClick={() => deleteJournal(entry.id)} title="기록 삭제">
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="muted">아직 기록이 없습니다. 매수/매도 전 판단 이유부터 남기면 전략 관리 품질이 좋아집니다.</p>
+              )}
+            </article>
+            </>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function PanelTitle({ icon, title }: { icon: ReactNode; title: string }) {
+  return <h2 className="panel-title">{icon}{title}</h2>;
+}
+
+function ListBlock({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="list-block">
+      <h3>{title}</h3>
+      <ul>{items.map((item) => <li key={item}>{item}</li>)}</ul>
+    </div>
+  );
+}
+
+function RuleList({ title, items }: { title: string; items: SplitStep[] }) {
+  return (
+    <div className="rule-list">
+      <h3>{title}</h3>
+      {items.map((item) => (
+        <div key={`${title}-${item.step}`}>
+          <strong>{item.step}</strong>
+          <small>{item.trigger} · {item.ratio_of_target}% · {formatKrw(item.amount)}</small>
+        </div>
+      ))}
+    </div>
+  );
+}

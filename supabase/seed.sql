@@ -1,0 +1,8 @@
+-- Seed data (development only — do NOT apply to production as-is).
+--
+-- Replace placeholder ids with real auth.users.id values before applying.
+-- Example:
+--
+-- insert into public.profiles (id, email)
+-- values ('00000000-0000-0000-0000-000000000000', 'dev@example.com')
+-- on conflict (id) do nothing;
