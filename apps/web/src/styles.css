@@ -1245,20 +1245,6 @@ tr:last-child td { border-bottom: 0; }
   gap: 8px;
   margin-top: 14px;
 }
-.import-local-card {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-  border: 1px dashed rgba(37, 99, 235, 0.35);
-  border-radius: 12px;
-  padding: 12px;
-  background: var(--soft-blue);
-}
-.import-local-card small {
-  color: var(--muted);
-  line-height: 1.45;
-}
-
 .strategy-list button {
   align-items: flex-start;
   background: #fbfcff;

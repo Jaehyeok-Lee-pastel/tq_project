@@ -764,25 +764,6 @@ export function ManagementPage() {
     }
   }
 
-  async function importLocalStrategies() {
-    if (!user) {
-      setStatus("로그인 후 기존 데이터를 가져올 수 있습니다.");
-      return;
-    }
-    setStatus("기존 로컬 전략 데이터를 내 계정으로 가져오는 중입니다...");
-    try {
-      const next = await fetchJson<ManagedStrategy[]>("/managed-strategies/import-local", {
-        method: "POST",
-      });
-      setStrategies(next);
-      setSelectedId(next[0]?.id ?? "");
-      setStatus(`${next.length}개 전략을 내 계정 저장소에서 불러왔습니다.`);
-      if (next[0]) await loadGuide(next[0].id);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "기존 데이터 가져오기에 실패했습니다.");
-    }
-  }
-
   async function loadGuide(id: string) {
     try {
       const next = await fetchJson<ManagedGuide>(`/managed-strategies/${id}/guide`);
@@ -1104,15 +1085,6 @@ export function ManagementPage() {
               </button>
             ))}
           </div>
-          {configured && user ? (
-            <div className="import-local-card">
-              <strong>기존 데이터 이전</strong>
-              <small>로그인 전 JSON 저장소에 있던 전략을 현재 계정으로 복사합니다.</small>
-              <button type="button" onClick={importLocalStrategies}>
-                기존 데이터 가져오기
-              </button>
-            </div>
-          ) : null}
         </article>
 
         <article className="panel span-8">
