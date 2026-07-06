@@ -52,7 +52,13 @@ export function LoginPage() {
       const result =
         mode === "login"
           ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
-          : await supabase.auth.signUp({ email: email.trim(), password });
+          : await supabase.auth.signUp({
+              email: email.trim(),
+              password,
+              options: {
+                emailRedirectTo: window.location.origin,
+              },
+            });
       if (result.error) throw result.error;
       setStatus(copy.success);
     } catch (error) {
