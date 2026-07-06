@@ -68,6 +68,18 @@ CANDIDATES: dict[str, CandidateAsset] = {
         "core",
         "레버리지 강도를 낮출 때 중심축으로 쓰기 좋은 기준 후보입니다.",
     ),
+    "QQQM": CandidateAsset(
+        "QQQM",
+        "Invesco NASDAQ 100 ETF",
+        "nasdaq",
+        "나스닥 1x 완충 자산",
+        0.55,
+        0.45,
+        0,
+        70,
+        "core",
+        "TQQQ와 같은 Nasdaq-100 방향성은 유지하되 3배 레버리지 위험을 1배로 낮추는 완충 후보입니다.",
+    ),
     "SMH": CandidateAsset(
         "SMH",
         "VanEck Semiconductor ETF",
