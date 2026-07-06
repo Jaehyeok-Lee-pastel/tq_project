@@ -368,32 +368,35 @@ def build_plans(
 ) -> list[StrategyPlan]:
     profile = request.profile
     score = profile.risk_score
-    min_cash = max(profile.min_cash_ratio, recommended_min_cash(score))
-    tqqq_base = recommended_tqqq_ratio(score, profile.max_tqqq_ratio, regime)
+    allocation_model = leverage_rotation_model(score, profile.max_tqqq_ratio, regime, distance)
+    min_cash = allocation_model["cash_like"]
+    tqqq_base = allocation_model["tqqq"]
     if not profile.allow_tqqq:
         tqqq_base = 0
 
     defense_symbol = choose_defense_symbol(score)
     ballast_symbol = choose_ballast_symbol(score)
     satellite_symbol = choose_growth_satellite_symbol(score)
-    satellite_ratio = recommended_satellite_ratio(score, profile.max_semiconductor_ratio)
-    ballast_ratio = recommended_ballast_ratio(score)
+    satellite_ratio = 0
+    ballast_ratio = allocation_model["ballast"]
+    one_x_ratio = allocation_model["one_x"]
 
-    core_ratio = recommended_core_ratio(score, tqqq_base, satellite_ratio, ballast_ratio, min_cash)
-    tqqq_cash = max(min_cash, 100 - tqqq_base - core_ratio - satellite_ratio - ballast_ratio)
+    core_symbol = choose_one_x_symbol(score, holdings)
+    core_ratio = one_x_ratio
+    tqqq_cash = max(0, 100 - tqqq_base - core_ratio - satellite_ratio - ballast_ratio)
     tqqq_plan = make_plan(
         request=request,
         holdings=holdings,
         total=total,
         plan_id="tqqq_200ma_coach",
-        title="리스크 맞춤 TQQQ 200일선 코어",
+        title="TQQQ 200일선 레버리지 조절형",
         summary=(
-            "보유 종목에 묶이지 않고 리스크 점수에 맞춰 TQQQ, QQQ 기준 노출, "
-            "SPYM/VOO 광범위 코어와 현금성 대기자금을 조합합니다."
+            "QQQ 200일선 위에서는 SGOV/현금을 과도하게 들기보다 TQQQ와 1x ETF로 시장 참여를 유지하고, "
+            "과열 구간에서는 TQQQ를 1x 또는 SGOV로 낮추는 전략입니다."
         ),
         ratios={
             symbol_if_allowed("TQQQ", profile): tqqq_base,
-            "QQQ" if score >= 55 else "VOO": core_ratio,
+            core_symbol: core_ratio,
             satellite_symbol: satellite_ratio,
             ballast_symbol: ballast_ratio,
             defense_symbol: tqqq_cash,
@@ -426,10 +429,10 @@ def build_plans(
         regime=regime,
     )
 
-    broad_core = clamp(25 + (75 - score) * 0.35, 15, 55)
-    mixed_tqqq = tqqq_base * 0.45
+    broad_core = max(core_ratio, clamp(35 + (70 - score) * 0.25, 25, 70))
+    mixed_tqqq = tqqq_base * 0.55
     mixed_qld = clamp(score * 0.12, 0, 15) if profile.target_count >= 3 else 0
-    mixed_satellite = min(satellite_ratio, 10)
+    mixed_satellite = 0
     mixed_ballast = recommended_ballast_ratio(score)
     mixed_cash = max(min_cash, 100 - broad_core - mixed_tqqq - mixed_qld - mixed_satellite - mixed_ballast)
     mixed_plan = make_plan(
@@ -466,6 +469,71 @@ def choose_semiconductor_symbol(holdings: list[HoldingInput], score: int) -> str
     if score >= 70:
         return "SMH"
     return "SOXX"
+
+
+def choose_one_x_symbol(score: int, holdings: list[HoldingInput]) -> str:
+    """Choose one 1x companion to avoid stacking overlapping Nasdaq sleeves."""
+    held_symbols = {holding.symbol.upper() for holding in holdings}
+    if "QQQM" in held_symbols or "QQQ" in held_symbols:
+        return "QQQM"
+    if score >= 75:
+        return "QQQM"
+    return "SPYM"
+
+
+def leverage_rotation_model(
+    score: int,
+    max_tqqq_ratio: float,
+    regime: MarketRegime,
+    distance: float,
+) -> dict[str, float]:
+    """TQQQ 200-day model: participate above MA200, defend below it.
+
+    The model intentionally uses broad bands instead of curve-fit thresholds:
+    - below MA200: SGOV/CASH defense
+    - normal uptrend: control risk by moving between TQQQ and 1x equity
+    - stretched uptrend: reduce TQQQ first, then allow SGOV only in extreme stretch
+    """
+    if regime == "risk_off":
+        return {"tqqq": 0, "one_x": 0, "ballast": 0, "cash_like": 100}
+
+    if score >= 85:
+        tqqq = 85
+    elif score >= 70:
+        tqqq = 70
+    elif score >= 55:
+        tqqq = 50
+    elif score >= 40:
+        tqqq = 30
+    else:
+        tqqq = 0
+
+    if regime == "reduced_entry":
+        tqqq *= 0.75
+    elif regime == "stretched_entry":
+        tqqq *= 0.45
+
+    if distance >= 50:
+        tqqq = min(tqqq, 10)
+        cash_like = 50
+    elif distance >= 40:
+        tqqq = min(tqqq, 25)
+        cash_like = 20
+    elif distance >= 25:
+        tqqq = min(tqqq, 40)
+        cash_like = 5
+    else:
+        cash_like = 0 if score >= 55 else 10
+
+    tqqq = round(min(tqqq, max_tqqq_ratio), 1)
+    ballast = 0 if score >= 55 else 10
+    one_x = max(0, 100 - tqqq - cash_like - ballast)
+    return {
+        "tqqq": tqqq,
+        "one_x": round(one_x, 1),
+        "ballast": round(ballast, 1),
+        "cash_like": round(cash_like, 1),
+    }
 
 
 def choose_growth_satellite_symbol(score: int) -> str:
@@ -613,6 +681,10 @@ def defensive_ratio(ratios: dict[str, float]) -> float:
     return sum(allocation_ratio(ratios, symbol) for symbol in ("CASH", "SGOV", "BIL", "SHY", "IEF", "TLT"))
 
 
+def one_x_equity_ratio(ratios: dict[str, float]) -> float:
+    return sum(allocation_ratio(ratios, symbol) for symbol in ("QQQ", "QQQM", "SPYM", "VOO", "SPLG"))
+
+
 def build_scores(
     ratios: dict[str, float],
     distance: float,
@@ -634,6 +706,8 @@ def build_scores(
     risk_gap = abs(strategy_risk - user_risk_score)
     tqqq = allocation_ratio(ratios, "TQQQ")
     cash = defensive_ratio(ratios)
+    one_x = one_x_equity_ratio(ratios)
+    buffer_ratio = cash if regime == "risk_off" else cash + one_x * 0.35
 
     rule_clarity = 18
     market_fit = (
@@ -643,8 +717,8 @@ def build_scores(
         if regime != "stretched_entry"
         else 13
     )
-    cash_defense = round(clamp(cash * 0.55, 4, 15))
-    drawdown_control = round(clamp(18 - tqqq * 0.13 + cash * 0.08, 4, 15))
+    cash_defense = round(clamp(buffer_ratio * 0.45, 4, 15))
+    drawdown_control = round(clamp(18 - tqqq * 0.13 + cash * 0.08 + one_x * 0.03, 4, 15))
     overfit_resistance = 10 if plan_id == "validated_universe_mix" else 8
     execution_quality = 8 if tqqq >= 45 else 10
     user_fit = round(clamp(10 - risk_gap / 10, 1, 10))
@@ -688,8 +762,10 @@ def build_scores(
     ]
     if regime == "stretched_entry":
         notes.append("QQQ가 200일선보다 많이 높아 신규 진입 신뢰도는 일부 감점했습니다.")
-    if cash < 15:
-        notes.append("현금성 방어력이 낮아 급락 대응 신뢰도가 낮아질 수 있습니다.")
+    if regime == "risk_off" and cash < 80:
+        notes.append("QQQ 200일선 아래에서는 SGOV/CASH 방어 비중이 충분해야 합니다.")
+    elif regime != "risk_off" and cash < 10 and one_x < 25:
+        notes.append("현금은 적어도 괜찮지만, TQQQ를 낮춰 받을 1x 완충 자산이 부족합니다.")
 
     return StrategyScores(
         confidence_score=int(clamp(confidence, 0, 100)),
@@ -851,6 +927,7 @@ def build_risk_metrics(
     qld = allocation_ratio(ratios, "QLD")
     semi = sum(allocation_ratio(ratios, symbol) for symbol in ("SMH", "SOXX", "ACE K반도체TOP2"))
     cash = defensive_ratio(ratios)
+    one_x = one_x_equity_ratio(ratios)
     leverage_exposure = tqqq * 3 + qld * 2
 
     return [
@@ -866,14 +943,25 @@ def build_risk_metrics(
             ),
         ),
         RiskMetric(
+            label="1x 완충 자산",
+            value=f"{one_x:.1f}%",
+            level="low" if one_x >= 45 else "medium" if one_x >= 25 else "high",
+        ),
+        RiskMetric(
             label="반도체 집중",
             value=f"{semi:.1f}%",
             level="high" if semi >= 30 else "medium" if semi >= 20 else "low",
         ),
         RiskMetric(
-            label="현금성 방어",
+            label="SGOV/현금 방어",
             value=f"{cash:.1f}%",
-            level="low" if cash >= 25 else "medium" if cash >= 15 else "high",
+            level=(
+                "low"
+                if (regime == "risk_off" and cash >= 80) or (regime != "risk_off" and cash >= 5)
+                else "medium"
+                if cash > 0
+                else "high"
+            ),
         ),
         RiskMetric(
             label="시장 진입 위치",

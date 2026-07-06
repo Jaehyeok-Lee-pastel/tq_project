@@ -769,7 +769,7 @@ export function HomePage() {
               <input type="number" min={2} max={5} value={profile.target_count} onChange={(event) => setProfile({ ...profile, target_count: Number(event.target.value) })} />
             </label>
             <label>
-              최소 현금 비중
+              방어/대기 최소 비중
               <input type="number" value={profile.min_cash_ratio} onChange={(event) => setProfile({ ...profile, min_cash_ratio: Number(event.target.value) })} />
             </label>
             <label>
