@@ -5,8 +5,10 @@ from app.api.deps import CurrentUserDep, OptionalCurrentUserDep
 from app.repositories.managed_strategy_repository import (
     add_journal_entry,
     advise_contribution,
+    advise_philosophy_upgrade,
     apply_adjustment,
     apply_contribution,
+    apply_philosophy_upgrade,
     advise_adjustment,
     build_backtest_request_from_strategy,
     build_guide,
@@ -25,6 +27,8 @@ from app.schemas.managed_strategy import (
     ManagedStrategyCreate,
     ManagedStrategyGuide,
     ManagedStrategyUpdate,
+    PhilosophyUpgradeAdvice,
+    PhilosophyUpgradeApplyRequest,
     StrategyAdjustmentAdvice,
     StrategyAdjustmentApplyRequest,
     StrategyAdjustmentRequest,
@@ -157,5 +161,28 @@ async def post_apply_contribution(
 ) -> ManagedStrategy:
     try:
         return apply_contribution(strategy_id, payload, current_user.user_id if current_user else None)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Strategy not found") from exc
+
+
+@router.post("/{strategy_id}/philosophy-advice", response_model=PhilosophyUpgradeAdvice)
+async def post_philosophy_advice(
+    strategy_id: str,
+    current_user: OptionalCurrentUserDep,
+) -> PhilosophyUpgradeAdvice:
+    try:
+        return advise_philosophy_upgrade(get_strategy(strategy_id, current_user.user_id if current_user else None))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Strategy not found") from exc
+
+
+@router.post("/{strategy_id}/apply-philosophy-upgrade", response_model=ManagedStrategy)
+async def post_apply_philosophy_upgrade(
+    strategy_id: str,
+    payload: PhilosophyUpgradeApplyRequest,
+    current_user: OptionalCurrentUserDep,
+) -> ManagedStrategy:
+    try:
+        return apply_philosophy_upgrade(strategy_id, payload, current_user.user_id if current_user else None)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Strategy not found") from exc

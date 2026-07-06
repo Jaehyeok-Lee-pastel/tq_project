@@ -62,7 +62,7 @@ class StrategyVersionAllocation(BaseModel):
 class StrategyVersionEntry(BaseModel):
     version: int
     created_at: str
-    change_type: Literal["created", "adjustment", "manual"]
+    change_type: Literal["created", "adjustment", "manual", "philosophy"]
     title: str
     note: str = ""
     before_allocations: list[StrategyVersionAllocation] = Field(default_factory=list)
@@ -193,3 +193,30 @@ class ContributionPlanAdvice(BaseModel):
 class ContributionPlanApplyRequest(ContributionPlanRequest):
     accepted_headline: str = ""
     selected_plan_id: str = "balanced"
+
+
+class PhilosophyAllocationDiff(BaseModel):
+    symbol: str
+    current_ratio: float
+    suggested_ratio: float
+    delta_ratio: float
+    reason: str
+
+
+class PhilosophyUpgradeAdvice(BaseModel):
+    verdict: Literal["up_to_date", "update_recommended", "major_change"]
+    headline: str
+    summary: str
+    qqq_distance_from_200ma: float
+    inferred_risk_score: int
+    current_plan_title: str
+    suggested_plan_id: str
+    suggested_plan_title: str
+    suggested_plan_summary: str
+    allocation_diffs: list[PhilosophyAllocationDiff]
+    changes: list[str]
+    cautions: list[str]
+
+
+class PhilosophyUpgradeApplyRequest(BaseModel):
+    accepted_headline: str = ""

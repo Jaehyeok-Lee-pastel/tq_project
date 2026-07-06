@@ -17,6 +17,9 @@ from app.schemas.managed_strategy import (
     ManagedStrategyCreate,
     ManagedStrategyGuide,
     ManagedStrategyUpdate,
+    PhilosophyAllocationDiff,
+    PhilosophyUpgradeAdvice,
+    PhilosophyUpgradeApplyRequest,
     SplitExecutionStep,
     StrategyAdjustmentAdvice,
     StrategyAdjustmentAllocation,
@@ -28,6 +31,8 @@ from app.schemas.managed_strategy import (
     StrategyVersionEntry,
 )
 from app.schemas.backtest import BacktestRunRequest
+from app.schemas.strategy import HoldingInput, InvestorProfile, StrategyPlan, StrategyRecommendRequest
+from app.services.strategy_engine import recommend_strategy
 from app.services.supabase import get_supabase
 
 DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "managed_strategies.json"
@@ -123,6 +128,8 @@ def build_backtest_request_from_strategy(
 ) -> BacktestRunRequest:
     tqqq_ratio = _allocation_ratio(strategy, "TQQQ")
     qld_ratio = _allocation_ratio(strategy, "QLD")
+    one_x_ratio = _one_x_buffer_ratio(strategy)
+    one_x_symbol = _primary_one_x_symbol(strategy)
     if tqqq_ratio >= 0.1:
         backtest_strategy = "tqqq_200ma"
     elif qld_ratio >= 0.1:
@@ -135,6 +142,8 @@ def build_backtest_request_from_strategy(
         initial_capital=max(strategy.total_capital, 1),
         tqqq_target_ratio=round(tqqq_ratio, 1),
         qld_target_ratio=round(qld_ratio, 1),
+        one_x_target_ratio=round(one_x_ratio, 1),
+        one_x_symbol=one_x_symbol,
         cash_yield=cash_yield,
         projection_years=projection_years,
     )
@@ -225,9 +234,11 @@ def delete_journal_entry(strategy_id: str, entry_id: str, user_id: str | None = 
 def build_guide(strategy: ManagedStrategy) -> ManagedStrategyGuide:
     distance = (strategy.market.qqq_close / strategy.market.qqq_sma200 - 1) * 100
     tqqq_ratio = _allocation_ratio(strategy, "TQQQ")
-    cash_ratio = _allocation_ratio(strategy, "SGOV") + _allocation_ratio(strategy, "CASH")
+    ratios = _allocation_map(strategy)
+    cash_like_ratio = _cash_like_ratio(ratios)
+    one_x_ratio = _one_x_buffer_ratio(strategy)
     execution_plan = build_execution_plan(strategy, distance)
-    issues = _build_issues(distance, tqqq_ratio, cash_ratio)
+    issues = _build_issues(distance, tqqq_ratio, cash_like_ratio, one_x_ratio)
 
     danger_count = sum(1 for issue in issues if issue.level == "danger")
     watch_count = sum(1 for issue in issues if issue.level == "watch")
@@ -469,7 +480,7 @@ def advise_contribution(strategy: ManagedStrategy, payload: ContributionPlanRequ
                 gap_amount=round(gap),
                 suggested_amount=round(suggested),
                 action=action,  # type: ignore[arg-type]
-                reason=reason,
+                    reason=reason,
             )
         )
 
@@ -696,7 +707,113 @@ def apply_contribution(strategy_id: str, payload: ContributionPlanApplyRequest, 
     raise KeyError(strategy_id)
 
 
-def _build_issues(distance: float, tqqq_ratio: float, cash_ratio: float) -> list[ComplianceIssue]:
+def advise_philosophy_upgrade(strategy: ManagedStrategy) -> PhilosophyUpgradeAdvice:
+    request = _strategy_to_latest_recommend_request(strategy)
+    response = recommend_strategy(request)
+    suggested = response.plans[0]
+    current = _allocation_map(strategy)
+    next_ratios = {allocation.symbol.upper(): allocation.target_ratio for allocation in suggested.allocations}
+    symbols = sorted(set(current) | set(next_ratios), key=lambda symbol: (symbol not in {"TQQQ", "QQQM", "SPYM", "SGOV", "CASH"}, symbol))
+    diffs = [
+        PhilosophyAllocationDiff(
+            symbol=symbol,
+            current_ratio=round(current.get(symbol, 0), 1),
+            suggested_ratio=round(next_ratios.get(symbol, 0), 1),
+            delta_ratio=round(next_ratios.get(symbol, 0) - current.get(symbol, 0), 1),
+            reason=_philosophy_diff_reason(symbol, current.get(symbol, 0), next_ratios.get(symbol, 0), response.qqq_distance_from_200ma),
+        )
+        for symbol in symbols
+        if current.get(symbol, 0) >= 0.1 or next_ratios.get(symbol, 0) >= 0.1
+    ]
+    total_delta = sum(abs(item.delta_ratio) for item in diffs)
+    if total_delta < 5:
+        verdict = "up_to_date"
+        headline = "현재 전략은 최신 TQQQ 200일선 철학과 큰 차이가 없습니다."
+    elif total_delta < 25:
+        verdict = "update_recommended"
+        headline = "최신 철학 기준으로 일부 비중 조정이 권장됩니다."
+    else:
+        verdict = "major_change"
+        headline = "최신 철학과 현재 저장 전략의 차이가 큽니다."
+
+    changes = [
+        "200일선 위에서는 시장 참여를 유지하되 TQQQ 강도를 조절합니다.",
+        "TQQQ를 줄이는 구간에서는 현금만 늘리기보다 QQQM/SPYM 같은 1x 완충 자산을 우선 검토합니다.",
+        "200일선 아래 또는 극단 과열 구간에서는 SGOV/CASH 방어 비중을 명확히 높입니다.",
+    ]
+    cautions = [
+        "기존 전략은 당시 판단 기록으로 보존하고, 적용 시 새 버전으로만 반영합니다.",
+        "새 버전 적용 후에도 실제 매수는 오늘의 실행 기준과 분할매수 조건을 다시 확인해야 합니다.",
+    ]
+    if response.qqq_distance_from_200ma >= 15:
+        cautions.append("QQQ가 200일선 대비 +15% 이상이면 TQQQ 추가 집행은 추격매수로 보지 않도록 더 엄격히 점검합니다.")
+
+    return PhilosophyUpgradeAdvice(
+        verdict=verdict,  # type: ignore[arg-type]
+        headline=headline,
+        summary=(
+            f"저장된 '{strategy.plan.title}' 전략을 최신 엔진으로 다시 계산했습니다. "
+            f"현재 QQQ 200일선 이격은 {response.qqq_distance_from_200ma:.2f}%이고, "
+            f"추정 리스크 허용도는 {request.profile.risk_score}점입니다."
+        ),
+        qqq_distance_from_200ma=response.qqq_distance_from_200ma,
+        inferred_risk_score=request.profile.risk_score,
+        current_plan_title=strategy.plan.title,
+        suggested_plan_id=suggested.id,
+        suggested_plan_title=suggested.title,
+        suggested_plan_summary=suggested.summary,
+        allocation_diffs=diffs,
+        changes=changes,
+        cautions=cautions,
+    )
+
+
+def apply_philosophy_upgrade(
+    strategy_id: str,
+    payload: PhilosophyUpgradeApplyRequest,
+    user_id: str | None = None,
+) -> ManagedStrategy:
+    items = _load(user_id)
+    for index, strategy in enumerate(items):
+        if strategy.id != strategy_id:
+            continue
+        request = _strategy_to_latest_recommend_request(strategy)
+        response = recommend_strategy(request)
+        suggested = response.plans[0]
+        data = strategy.model_dump()
+        before = _version_allocations_from_plan(strategy.plan)
+        data["plan"] = suggested.model_dump()
+        data["version"] = strategy.version + 1
+        data["updated_at"] = utc_now()
+        updated = ManagedStrategy.model_validate(data)
+        history = list(strategy.version_history)
+        history.append(
+            StrategyVersionEntry(
+                version=updated.version,
+                created_at=updated.updated_at,
+                change_type="philosophy",
+                title=payload.accepted_headline or "최신 TQQQ 200일선 철학 반영",
+                note=(
+                    f"기존 '{strategy.plan.title}' 전략을 최신 철학 '{suggested.title}' 기준으로 재설계했습니다. "
+                    f"QQQ 200일선 이격 {response.qqq_distance_from_200ma:.2f}%, 추정 리스크 {request.profile.risk_score}점."
+                ),
+                before_allocations=before,
+                after_allocations=_version_allocations_from_plan(suggested),
+            )
+        )
+        data["version_history"] = [item.model_dump() for item in history]
+        items[index] = ManagedStrategy.model_validate(data)
+        _save(items, user_id)
+        return items[index]
+    raise KeyError(strategy_id)
+
+
+def _build_issues(
+    distance: float,
+    tqqq_ratio: float,
+    cash_like_ratio: float,
+    one_x_ratio: float,
+) -> list[ComplianceIssue]:
     issues: list[ComplianceIssue] = []
     if distance <= 0:
         issues.append(
@@ -730,12 +847,20 @@ def _build_issues(distance: float, tqqq_ratio: float, cash_ratio: float) -> list
                 detail="10% 조정에도 계좌 변동이 커질 수 있어 분할매도 규칙을 미리 확인하세요.",
             )
         )
-    if cash_ratio < 15:
+    if distance <= 0 and cash_like_ratio < 60:
+        issues.append(
+            ComplianceIssue(
+                level="danger",
+                title="방어 자산 부족",
+                detail="QQQ가 200일선 아래일 때는 SGOV/CASH 방어 비중을 충분히 확보해야 합니다.",
+            )
+        )
+    elif distance > 0 and one_x_ratio < 20 and cash_like_ratio >= 25:
         issues.append(
             ComplianceIssue(
                 level="watch",
-                title="방어 자금 부족",
-                detail="200일선 이탈 또는 급락 대응을 위한 현금성 비중이 낮습니다.",
+                title="1x 완충 부족",
+                detail="200일선 위에서는 현금성 자산만 늘리기보다 QQQM/SPYM 같은 1x 완충 자산으로 시장 참여를 유지하는지 점검하세요.",
             )
         )
     return issues
@@ -763,7 +888,7 @@ def build_execution_plan(strategy: ManagedStrategy, distance: float) -> list[Spl
                 ratio_of_target=round(amount / _allocation_amount(strategy, target_symbol) * 100, 1)
                 if _allocation_amount(strategy, target_symbol)
                 else step.ratio_of_target,
-                reason=reason,
+                reason=f"{reason} {_funding_hint(strategy, 'buy', target_symbol, status)}".strip(),
                 action_label=_action_label("buy", status, amount),
             )
         )
@@ -783,7 +908,7 @@ def build_execution_plan(strategy: ManagedStrategy, distance: float) -> list[Spl
                 distance_to_trigger_pct=trigger["distance"],
                 amount=step.amount,
                 ratio_of_target=step.ratio_of_target,
-                reason=reason,
+                reason=f"{reason} {_funding_hint(strategy, 'sell', target_symbol, status)}".strip(),
                 action_label=_action_label("sell", status, step.amount),
             )
         )
@@ -794,6 +919,21 @@ def _price_distance(current: float, trigger_price: float | None) -> float | None
     if not trigger_price:
         return None
     return round((current / trigger_price - 1) * 100, 2)
+
+
+def _funding_hint(strategy: ManagedStrategy, side: str, target_symbol: str, status: str) -> str:
+    if status == "blocked":
+        return "재원 전환 금지: SGOV/CASH는 방어 또는 다음 조건까지 유지합니다."
+    if status != "ready":
+        return "재원 대기: TQQQ 매수 재원과 1x 완충 재원을 분리해 둡니다."
+    if side == "buy":
+        cash_like = _cash_like_ratio(_allocation_map(strategy))
+        if target_symbol in {"TQQQ", "QLD"}:
+            if cash_like > 0:
+                return "실행 재원: 미사용 현금 또는 SGOV 일부를 매도해 레버리지 분할매수 재원으로만 사용합니다."
+            return "실행 재원: 신규 입금 또는 미집행 현금이 있을 때만 집행합니다."
+        return "실행 재원: 레버리지 추격매수가 아니라 1x 완충 비중 보완으로 처리합니다."
+    return "매도금 처리: 200일선 위 감속이면 QQQM/SPYM, 200일선 아래 방어면 SGOV/CASH로 이동합니다."
 
 
 def _buy_trigger_detail(strategy: ManagedStrategy, index: int) -> dict[str, float | str | None]:
@@ -987,6 +1127,119 @@ def _action_label(side: str, status: str, amount: float) -> str:
     return "대기"
 
 
+def _strategy_to_latest_recommend_request(strategy: ManagedStrategy) -> StrategyRecommendRequest:
+    ratios = _allocation_map(strategy)
+    holdings = [
+        HoldingInput(
+            symbol=allocation.symbol,
+            name=allocation.name,
+            amount=round(strategy.total_capital * allocation.target_ratio / 100),
+            category=_category_for_symbol(allocation.symbol),
+        )
+        for allocation in strategy.plan.allocations
+        if allocation.symbol.upper() != "CASH" and allocation.target_ratio >= 0.1
+    ]
+    cash = round(
+        sum(
+            strategy.total_capital * allocation.target_ratio / 100
+            for allocation in strategy.plan.allocations
+            if allocation.symbol.upper() == "CASH"
+        )
+    )
+    risk_score = _infer_risk_score_for_latest_engine(strategy)
+    return StrategyRecommendRequest(
+        holdings=holdings,
+        cash=max(cash, 0),
+        market=strategy.market,
+        use_ai=False,
+        profile=InvestorProfile(
+            risk_profile=_risk_profile_from_score(risk_score),
+            risk_score=risk_score,
+            target_count=max(2, min(5, len([ratio for ratio in ratios.values() if ratio >= 1]))),
+            allow_tqqq=risk_score >= 45,
+            prefer_200ma=True,
+            min_cash_ratio=0 if risk_score >= 55 else 10,
+            max_tqqq_ratio=_latest_max_tqqq_ratio(strategy, risk_score),
+            max_semiconductor_ratio=20,
+            max_single_position_ratio=80,
+            goal="기존 저장 전략을 최신 TQQQ 200일선 철학 기준으로 재검토합니다.",
+        ),
+    )
+
+
+def _infer_risk_score_for_latest_engine(strategy: ManagedStrategy) -> int:
+    ratios = _allocation_map(strategy)
+    tqqq = ratios.get("TQQQ", 0)
+    qld = ratios.get("QLD", 0)
+    cash_like = _cash_like_ratio(ratios)
+    semi = sum(ratios.get(symbol, 0) for symbol in ("SMH", "SOXX", "ACE K반도체TOP2"))
+    score = 55 + tqqq * 0.55 + qld * 0.35 + semi * 0.12 - cash_like * 0.12
+    if tqqq >= 25:
+        score += 8
+    if qld >= 25 and tqqq <= 5:
+        score += 5
+    return int(round(_clamp(score, 35, 92)))
+
+
+def _latest_max_tqqq_ratio(strategy: ManagedStrategy, risk_score: int) -> float:
+    current = _allocation_ratio(strategy, "TQQQ")
+    if risk_score >= 85:
+        return max(current, 75)
+    if risk_score >= 70:
+        return max(current, 70)
+    if risk_score >= 55:
+        return max(current, 55)
+    return max(current, 35)
+
+
+def _risk_profile_from_score(score: int):
+    if score >= 85:
+        return "very_aggressive"
+    if score >= 65:
+        return "aggressive"
+    if score >= 40:
+        return "balanced"
+    return "defensive"
+
+
+def _category_for_symbol(symbol: str) -> str:
+    symbol = symbol.upper()
+    if symbol in {"TQQQ", "QLD"}:
+        return "nasdaq_leverage"
+    if symbol in {"QQQ", "QQQM"}:
+        return "nasdaq"
+    if symbol in {"SPYM", "VOO"}:
+        return "broad_market"
+    if symbol in {"SGOV", "BIL", "SHY", "IEF"}:
+        return "bond"
+    if symbol in {"SMH", "SOXX", "ACE K반도체TOP2"}:
+        return "semiconductor"
+    return "other"
+
+
+def _philosophy_diff_reason(symbol: str, current: float, suggested: float, distance: float) -> str:
+    delta = suggested - current
+    if abs(delta) < 0.1:
+        return "최신 철학에서도 현재 비중을 유지합니다."
+    if symbol == "TQQQ":
+        if delta > 0:
+            return "리스크 허용도와 200일선 위치를 기준으로 공격 엔진 비중을 높입니다."
+        return "과열도 또는 방어 필요성을 반영해 TQQQ 강도를 낮춥니다."
+    if symbol in {"QQQ", "QQQM", "SPYM", "VOO"}:
+        return "TQQQ를 전부 현금화하지 않고 1x 완충 자산으로 상승장 참여를 유지합니다."
+    if symbol in {"SGOV", "BIL", "CASH"}:
+        if distance > 0 and delta < 0:
+            return "200일선 위에서는 과도한 대기자금을 줄이고 시장 참여 자산으로 이동합니다."
+        return "방어 구간 또는 극단 과열에 대비한 대기/방어 자산입니다."
+    if delta < 0:
+        return "TQQQ 200일선 전략과 중복되거나 핵심성이 낮아 비중을 줄입니다."
+    return "최신 철학 기준 보완 자산으로 일부 편입합니다."
+
+
+def _clamp(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(maximum, value))
+
+
 def _allocation_ratio(strategy: ManagedStrategy, symbol: str) -> float:
     return sum(
         allocation.target_ratio
@@ -1001,6 +1254,20 @@ def _allocation_amount(strategy: ManagedStrategy, symbol: str) -> float:
         for allocation in strategy.plan.allocations
         if allocation.symbol.upper() == symbol
     )
+
+
+def _one_x_buffer_ratio(strategy: ManagedStrategy) -> float:
+    return sum(
+        _allocation_ratio(strategy, symbol)
+        for symbol in ("QQQ", "QQQM", "SPYM", "VOO", "SPLG")
+    )
+
+
+def _primary_one_x_symbol(strategy: ManagedStrategy) -> str:
+    for symbol in ("QQQM", "QQQ", "SPYM", "VOO", "SPLG"):
+        if _allocation_ratio(strategy, symbol) >= 0.1:
+            return symbol
+    return "QQQ"
 
 
 def _allocation_map(strategy: ManagedStrategy) -> dict[str, float]:

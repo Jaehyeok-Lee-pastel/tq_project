@@ -55,7 +55,7 @@ type ManagedStrategy = {
   version_history: {
     version: number;
     created_at: string;
-    change_type: "created" | "adjustment" | "manual";
+    change_type: "created" | "adjustment" | "manual" | "philosophy";
     title: string;
     note: string;
     before_allocations: { symbol: string; ratio: number }[];
@@ -151,6 +151,26 @@ type ContributionAdvice = {
   allocations: ContributionAllocation[];
   recommended_plan_id: string;
   plans: ContributionPlanOption[];
+};
+type PhilosophyUpgradeAdvice = {
+  verdict: "up_to_date" | "update_recommended" | "major_change";
+  headline: string;
+  summary: string;
+  qqq_distance_from_200ma: number;
+  inferred_risk_score: number;
+  current_plan_title: string;
+  suggested_plan_id: string;
+  suggested_plan_title: string;
+  suggested_plan_summary: string;
+  allocation_diffs: {
+    symbol: string;
+    current_ratio: number;
+    suggested_ratio: number;
+    delta_ratio: number;
+    reason: string;
+  }[];
+  changes: string[];
+  cautions: string[];
 };
 type FxRate = {
   pair: string;
@@ -409,6 +429,7 @@ export function ManagementPage() {
   const [guide, setGuide] = useState<ManagedGuide | null>(null);
   const [adjustmentAdvice, setAdjustmentAdvice] = useState<AdjustmentAdvice | null>(null);
   const [contributionAdvice, setContributionAdvice] = useState<ContributionAdvice | null>(null);
+  const [philosophyAdvice, setPhilosophyAdvice] = useState<PhilosophyUpgradeAdvice | null>(null);
   const [selectedContributionPlanId, setSelectedContributionPlanId] = useState("balanced");
   const [targetCashRatio, setTargetCashRatio] = useState(initialSettings.targetCashRatio);
   const [monthlyContribution, setMonthlyContribution] = useState(initialSettings.monthlyContribution);
@@ -781,6 +802,7 @@ export function ManagementPage() {
       setGuide(next);
       setAdjustmentAdvice(null);
       setContributionAdvice(null);
+      setPhilosophyAdvice(null);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "전략 가이드를 불러오지 못했습니다.");
     }
@@ -903,6 +925,40 @@ export function ManagementPage() {
       setStatus(advice.headline);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "전략 조정 조언을 불러오지 못했습니다.");
+    }
+  }
+
+  async function requestPhilosophyAdvice() {
+    if (!selected) return;
+    try {
+      setStatus("현재 전략을 최신 TQQQ 200일선 철학으로 점검하는 중입니다.");
+      const advice = await fetchJson<PhilosophyUpgradeAdvice>(`/managed-strategies/${selected.id}/philosophy-advice`, {
+        method: "POST",
+      });
+      setPhilosophyAdvice(advice);
+      setStatus(advice.headline);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "최신 철학 점검을 불러오지 못했습니다.");
+    }
+  }
+
+  async function applyPhilosophyAdvice() {
+    if (!selected || !philosophyAdvice) return;
+    try {
+      const updated = await fetchJson<ManagedStrategy>(`/managed-strategies/${selected.id}/apply-philosophy-upgrade`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accepted_headline: philosophyAdvice.headline,
+        }),
+      });
+      setStrategies((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setGuide((current) => (current ? { ...current, strategy: updated } : current));
+      setPhilosophyAdvice(null);
+      await loadGuide(updated.id);
+      setStatus("최신 철학을 새 버전으로 반영했습니다. 기존 버전은 이력에 보존됩니다.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "최신 철학 적용에 실패했습니다.");
     }
   }
 
@@ -1339,6 +1395,55 @@ export function ManagementPage() {
                 </div>
               ))}
             </div>
+          </article>
+        ) : null}
+
+        {activeTab === "strategy" && selected ? (
+          <article className="panel span-12 adjustment-coach">
+            <PanelTitle icon={<BookOpenCheck size={18} />} title="최신 철학 점검" />
+            <div className="adjustment-form">
+              <div>
+                <span className="section-label">Philosophy Upgrade</span>
+                <h3>현재 저장된 전략을 최신 TQQQ 200일선 철학으로 다시 점검합니다.</h3>
+                <p className="muted">기존 전략은 당시의 판단 기록으로 보존하고, 최신 철학을 적용할 때만 새 버전으로 반영합니다.</p>
+              </div>
+              <button className="primary" onClick={requestPhilosophyAdvice}>
+                <BookOpenCheck size={16} />
+                최신 철학 점검 받기
+              </button>
+            </div>
+            {philosophyAdvice ? (
+              <div className={`adjustment-result ${philosophyAdvice.verdict === "major_change" ? "watch" : "ok"}`}>
+                <div>
+                  <span className="section-label">{philosophyAdvice.verdict}</span>
+                  <h3>{philosophyAdvice.headline}</h3>
+                  <p>{philosophyAdvice.summary}</p>
+                </div>
+                <div className="adjustment-metrics">
+                  <span><small>현재 전략</small><strong>{philosophyAdvice.current_plan_title}</strong></span>
+                  <span><small>최신 추천</small><strong>{philosophyAdvice.suggested_plan_title}</strong></span>
+                  <span><small>추정 리스크</small><strong>{philosophyAdvice.inferred_risk_score}점</strong></span>
+                  <span><small>QQQ 이격</small><strong>{formatPct(philosophyAdvice.qqq_distance_from_200ma)}</strong></span>
+                </div>
+                <p className="muted">{philosophyAdvice.suggested_plan_summary}</p>
+                <ListBlock title="반영되는 철학" items={philosophyAdvice.changes} />
+                <ListBlock title="주의할 점" items={philosophyAdvice.cautions} />
+                <div className="adjustment-table">
+                  {philosophyAdvice.allocation_diffs.map((allocation) => (
+                    <div key={allocation.symbol}>
+                      <strong>{allocation.symbol}</strong>
+                      <span>{allocation.current_ratio.toFixed(1)}% → {allocation.suggested_ratio.toFixed(1)}%</span>
+                      <em>{allocation.delta_ratio >= 0 ? "+" : ""}{allocation.delta_ratio.toFixed(1)}%</em>
+                      <small>{allocation.reason}</small>
+                    </div>
+                  ))}
+                </div>
+                <button className="primary" onClick={applyPhilosophyAdvice}>
+                  <Save size={16} />
+                  최신 철학을 v{(selected.version ?? 1) + 1}로 적용
+                </button>
+              </div>
+            ) : null}
           </article>
         ) : null}
 

@@ -17,6 +17,8 @@ class BacktestRunRequest(BaseModel):
     end_date: str | None = None
     tqqq_target_ratio: float = Field(default=60, ge=0, le=100)
     qld_target_ratio: float = Field(default=70, ge=0, le=100)
+    one_x_target_ratio: float = Field(default=0, ge=0, le=100)
+    one_x_symbol: str = "QQQ"
     moving_average_days: int = Field(default=200, ge=50, le=300)
     cash_yield: float = Field(default=3.0, ge=0, le=10)
     fee_bps: float = Field(default=5, ge=0, le=100)

@@ -157,6 +157,8 @@ def simulate_strategy(
             initial_capital=request.initial_capital,
             target_symbol=target_symbol,
             target_ratio=target_ratio / 100,
+            one_x_ratio=request.one_x_target_ratio / 100,
+            one_x_symbol=request.one_x_symbol,
             daily_cash_return=daily_cash_return,
             cost_ratio=cost_ratio,
             moving_average_days=request.moving_average_days,
@@ -168,6 +170,8 @@ def simulate_staged_200ma_strategy(
     initial_capital: float,
     target_symbol: str,
     target_ratio: float,
+    one_x_ratio: float,
+    one_x_symbol: str,
     daily_cash_return: float,
     cost_ratio: float,
     moving_average_days: int,
@@ -235,15 +239,24 @@ def simulate_staged_200ma_strategy(
             position_ratio = desired_ratio
 
         asset_return = price_return(prev, current, target_symbol)
-        day_return = position_ratio * asset_return + (1 - position_ratio) * daily_cash_return
+        active_one_x_ratio = 0.0 if prev.qqq <= prev.sma200 else min(one_x_ratio, max(0.0, 1 - position_ratio))
+        cash_ratio = max(0.0, 1 - position_ratio - active_one_x_ratio)
+        day_return = (
+            position_ratio * asset_return
+            + active_one_x_ratio * price_return(prev, current, one_x_symbol)
+            + cash_ratio * daily_cash_return
+        )
         equity *= 1 + day_return
         peak = max(peak, equity)
+        position_label = target_symbol if position_ratio > 0 else "CASH"
+        if active_one_x_ratio > 0:
+            position_label = f"{position_label}+{one_x_symbol}" if position_ratio > 0 else one_x_symbol
         curve.append(
             EquityPoint(
                 date=current.date,
                 equity=round(equity, 2),
                 drawdown=round((equity / peak - 1) * 100, 2),
-                position=target_symbol if position_ratio > 0 else "CASH",
+                position=position_label,
             )
         )
     return curve, trades
@@ -288,6 +301,8 @@ def simulate_buy_hold(
 
 
 def price_return(prev: BacktestFrame, current: BacktestFrame, symbol: str) -> float:
+    if symbol.upper() in {"QQQ", "QQQM", "SPYM", "VOO", "SPLG"}:
+        symbol = "QQQ"
     prev_price = getattr(prev, symbol.lower())
     current_price = getattr(current, symbol.lower())
     return current_price / prev_price - 1
@@ -480,6 +495,11 @@ def build_interpretation(
         notes.append("TQQQ 장기 보유는 상승장 탄력은 크지만 손실 구간의 낙폭도 매우 큽니다.")
     if request.strategy in {"tqqq_200ma", "qld_200ma"}:
         notes.append("QQQ 200일선 기반 전략은 급락 방어를 노리지만 횡보장에서는 잦은 매매가 약점입니다.")
+        if request.one_x_target_ratio > 0:
+            notes.append(
+                f"저장 전략의 1x 완충 비중 {request.one_x_target_ratio:.1f}%는 200일선 위에서 "
+                f"{request.one_x_symbol} 기준 시장참여 수익으로 반영하고, 200일선 아래에서는 방어자산으로 전환해 계산했습니다."
+            )
     return notes
 
 
