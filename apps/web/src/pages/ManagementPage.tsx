@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BookOpenCheck, ClipboardCheck, FlaskConical, History, ListChecks, RefreshCw, Save, SlidersHorizontal, Target, Trash2 } from "lucide-react";
 import { useAuth } from "../app/AuthContext";
@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 const userSettingsKey = "tqcoach.userSettings";
+const AUTO_MARKET_REFRESH_MS = 30 * 60 * 1000;
 
 type Allocation = { symbol: string; name: string; target_ratio: number; target_amount: number; role: string };
 type SplitStep = { step: string; trigger: string; ratio_of_target: number; amount: number; note: string };
@@ -422,6 +423,7 @@ export function ManagementPage() {
   const [marketStatus, setMarketStatus] = useState("QQQ 시장 지표는 저장된 스냅샷 기준입니다.");
   const [status, setStatus] = useState("채택한 전략을 불러오는 중입니다.");
   const [activeTab, setActiveTab] = useState<ManageTab>("overview");
+  const marketRefreshInFlight = useRef(false);
   const [draft, setDraft] = useState({
     entry_type: "note" as JournalEntry["entry_type"],
     symbol: "TQQQ",
@@ -753,6 +755,15 @@ export function ManagementPage() {
     if (selected) void loadLiveQuotes(selected);
   }, [selected?.id, usdKrwRate]);
 
+  useEffect(() => {
+    if (!selected?.id) return;
+    void refreshMarketSnapshot({ silent: true });
+    const timer = window.setInterval(() => {
+      void refreshMarketSnapshot({ silent: true });
+    }, AUTO_MARKET_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [selected?.id]);
+
   async function loadStrategies() {
     try {
       const next = await fetchJson<ManagedStrategy[]>("/managed-strategies");
@@ -835,9 +846,11 @@ export function ManagementPage() {
     }
   }
 
-  async function refreshMarketSnapshot() {
-    if (!selected) return;
-    setMarketStatus("QQQ 20/50/200일선과 20일 고점을 갱신하는 중입니다.");
+  async function refreshMarketSnapshot(options?: { silent?: boolean }) {
+    if (!selected || marketRefreshInFlight.current) return;
+    marketRefreshInFlight.current = true;
+    const silent = Boolean(options?.silent);
+    if (!silent) setMarketStatus("QQQ 20/50/200일선과 20일 고점을 갱신하는 중입니다.");
     try {
       const history = await fetchJson<HistoryResponse>("/market/history/QQQ?limit=1200");
       if (!history.sma20 || !history.sma50 || !history.sma200 || !history.high20) {
@@ -859,14 +872,19 @@ export function ManagementPage() {
       setStrategies((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setGuide((current) => (current ? { ...current, strategy: updated } : current));
       await loadGuide(updated.id);
+      const refreshedAt = new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
       setMarketStatus(
-        `QQQ 지표 갱신 완료: ${history.latest.date} · 종가 ${formatUsd(history.latest.close)} · 20일선 ${formatUsd(history.sma20)} · 50일선 ${formatUsd(history.sma50)} · 200일선 ${formatUsd(history.sma200)}`,
+        `${silent ? "자동 " : ""}QQQ 지표 갱신 완료: ${history.latest.date} · ${refreshedAt} · 종가 ${formatUsd(history.latest.close)} · 20일선 ${formatUsd(history.sma20)} · 50일선 ${formatUsd(history.sma50)} · 200일선 ${formatUsd(history.sma200)}`,
       );
-      setStatus("최신 QQQ 지표를 반영해 분할 실행 계획을 다시 계산했습니다.");
+      if (!silent) setStatus("최신 QQQ 지표를 반영해 분할 실행 계획을 다시 계산했습니다.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "QQQ 시장 지표 갱신에 실패했습니다.";
-      setMarketStatus(message);
-      setStatus(message);
+      if (!silent) {
+        setMarketStatus(message);
+        setStatus(message);
+      }
+    } finally {
+      marketRefreshInFlight.current = false;
     }
   }
 
@@ -1098,7 +1116,7 @@ export function ManagementPage() {
                   <small className="version-badge">v{selected.version}</small>
                   <p>{selected.plan.summary}</p>
                   <div className="hero-actions inline-test-actions">
-                    <button type="button" onClick={refreshMarketSnapshot}>
+                    <button type="button" onClick={() => refreshMarketSnapshot()}>
                       <RefreshCw size={16} />
                       QQQ 지표 갱신
                     </button>

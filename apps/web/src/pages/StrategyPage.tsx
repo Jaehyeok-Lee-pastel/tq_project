@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot,
   BrainCircuit,
@@ -13,6 +13,7 @@ import {
 import { supabase } from "../lib/supabase";
 
 type PriceRow = { date: string; close: number };
+const AUTO_MARKET_REFRESH_MS = 30 * 60 * 1000;
 type ScoreLevel = "low" | "medium" | "high" | "very_high";
 type HoldingInput = { symbol: string; name: string; amount: number; category: string };
 type InvestorProfile = {
@@ -302,6 +303,7 @@ export function StrategyPage() {
   const [status, setStatus] = useState("포트폴리오와 리스크 점수를 입력한 뒤 전략을 추천받으세요.");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCandidates, setShowCandidates] = useState(false);
+  const marketRefreshInFlight = useRef(false);
 
   const totalCapital = useMemo(() => cash + holdings.reduce((sum, holding) => sum + holding.amount, 0), [cash, holdings]);
   const selectedPlan = recommendation?.plans.find((plan) => plan.id === selectedPlanId) ?? recommendation?.plans[0];
@@ -338,9 +340,14 @@ export function StrategyPage() {
     }));
     setStatus(`리스크 ${profile.risk_score}점 기준 권장값을 적용했습니다. ${profileRecommendationText(profile.risk_score)}`);
   }
-  async function loadMarket() {
-    setLoading("market");
-    setStatus("QQQ 시장 지표를 갱신하는 중입니다...");
+  const loadMarket = useCallback(async (options?: { silent?: boolean }) => {
+    if (marketRefreshInFlight.current) return;
+    marketRefreshInFlight.current = true;
+    const silent = Boolean(options?.silent);
+    if (!silent) {
+      setLoading("market");
+      setStatus("QQQ 시장 지표를 갱신하는 중입니다...");
+    }
     try {
       const rows = await fetchHistory("QQQ");
       const latest = rows[rows.length - 1];
@@ -350,13 +357,23 @@ export function StrategyPage() {
       const nextHigh20 = rollingHigh(rows, 20);
       if (!nextSma200) throw new Error("200일선 계산 데이터가 부족합니다.");
       setMarket({ qqq_close: latest.close, qqq_sma200: nextSma200, qqq_sma20: nextSma20, qqq_sma50: nextSma50, qqq_high20: nextHigh20, as_of: latest.date });
-      setStatus(`시장 지표 갱신 완료: ${latest.date}`);
+      const refreshedAt = new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+      setStatus(`${silent ? "자동 " : ""}시장 지표 갱신 완료: ${latest.date} · ${refreshedAt}`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "시장 지표 갱신 실패");
+      if (!silent) setStatus(error instanceof Error ? error.message : "시장 지표 갱신 실패");
     } finally {
-      setLoading("");
+      marketRefreshInFlight.current = false;
+      if (!silent) setLoading("");
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    void loadMarket({ silent: true });
+    const timer = window.setInterval(() => {
+      void loadMarket({ silent: true });
+    }, AUTO_MARKET_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [loadMarket]);
   async function runStrategy() {
     setLoading("strategy");
     setStatus("전략 추천을 계산하는 중입니다...");
@@ -393,7 +410,7 @@ export function StrategyPage() {
           <p>{status}</p>
         </div>
         <div className="hero-actions">
-          <button onClick={loadMarket} disabled={loading === "market"}>
+          <button onClick={() => loadMarket()} disabled={loading === "market"}>
             <RefreshCw size={17} />
             {loading === "market" ? "갱신 중" : "시장 지표 갱신"}
           </button>
