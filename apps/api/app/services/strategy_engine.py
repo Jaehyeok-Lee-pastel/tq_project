@@ -520,19 +520,16 @@ def leverage_rotation_model(
     else:
         tqqq = 0
 
-    if regime == "reduced_entry":
-        tqqq *= 0.75
-    elif regime == "stretched_entry":
-        tqqq *= 0.45
+    leverage_cap = tqqq_cap_from_disparity(distance, score)
+    tqqq = min(tqqq, leverage_cap)
 
     if distance >= 50:
-        tqqq = min(tqqq, 10)
-        cash_like = 50
+        cash_like = 60
     elif distance >= 40:
-        tqqq = min(tqqq, 25)
-        cash_like = 20
-    elif distance >= 25:
-        tqqq = min(tqqq, 40)
+        cash_like = 35
+    elif distance >= 30:
+        cash_like = 15
+    elif distance >= 20:
         cash_like = 5
     else:
         cash_like = 0 if score >= 55 else 10
@@ -546,6 +543,43 @@ def leverage_rotation_model(
         "ballast": round(ballast, 1),
         "cash_like": round(cash_like, 1),
     }
+
+
+def target_effective_leverage_by_disparity(distance: float, score: int) -> float:
+    """Research-informed leverage target from QQQ/MA200 distance.
+
+    Effective leverage assumes the rest of the growth sleeve is held in a 1x
+    ETF, so a 50% TQQQ + 50% 1x mix is roughly 2.0x.
+    """
+    if distance <= 0:
+        return 0.0
+    if distance < 10:
+        base = 2.5
+    elif distance < 20:
+        base = 2.0
+    elif distance < 30:
+        base = 1.5
+    else:
+        base = 1.0
+
+    if score >= 85 and distance < 30:
+        base += 0.5
+    elif score <= 45:
+        base -= 0.5
+    return round(clamp(base, 0.0, 3.0), 2)
+
+
+def tqqq_cap_from_disparity(distance: float, score: int) -> float:
+    if distance <= 0:
+        return 0
+    if distance >= 50:
+        return 0
+    if distance >= 40:
+        return 5
+    if distance >= 30:
+        return 15
+    effective = target_effective_leverage_by_disparity(distance, score)
+    return round(clamp((effective - 1) / 2 * 100, 0, 85), 1)
 
 
 def choose_growth_satellite_symbol(score: int) -> str:
@@ -668,7 +702,7 @@ def make_plan(
             distance,
             request.profile.risk_score,
         ),
-        risk_metrics=build_risk_metrics(normalized, distance, regime),
+        risk_metrics=build_risk_metrics(normalized, distance, regime, request.profile.risk_score),
         scores=scores,
         pros=build_pros(plan_id),
         cons=build_cons(plan_id, regime),
@@ -934,6 +968,7 @@ def build_risk_metrics(
     ratios: dict[str, float],
     distance: float,
     regime: MarketRegime,
+    score: int,
 ) -> list[RiskMetric]:
     tqqq = allocation_ratio(ratios, "TQQQ")
     qld = allocation_ratio(ratios, "QLD")
@@ -941,6 +976,8 @@ def build_risk_metrics(
     cash = defensive_ratio(ratios)
     one_x = one_x_equity_ratio(ratios)
     leverage_exposure = tqqq * 3 + qld * 2
+    effective_leverage = (tqqq * 3 + qld * 2 + one_x) / 100
+    target_effective = target_effective_leverage_by_disparity(distance, score)
 
     return [
         RiskMetric(
@@ -973,6 +1010,17 @@ def build_risk_metrics(
                 else "medium"
                 if cash > 0
                 else "high"
+            ),
+        ),
+        RiskMetric(
+            label="실효 레버리지",
+            value=f"{effective_leverage:.2f}x / 상한 {target_effective:.2f}x",
+            level=(
+                "high"
+                if target_effective and effective_leverage > target_effective + 0.2
+                else "medium"
+                if target_effective and effective_leverage > target_effective
+                else "low"
             ),
         ),
         RiskMetric(

@@ -133,6 +133,20 @@ export function RulesPage() {
           </div>
         </article>
 
+        <article className="panel span-12 rule-card">
+          <h2 className="panel-title">
+            <Gauge size={18} />
+            이격도별 실효 레버리지 상한
+          </h2>
+          <ul>
+            <li>QQQ가 200일선 아래면 방향 위험이 우선이므로 TQQQ는 0%, SGOV/CASH 방어를 기본으로 둡니다.</li>
+            <li>0~10% 위에서는 실효 2.5x 수준까지 허용해 TQQQ 70~75%와 1x ETF를 조합합니다.</li>
+            <li>10~20% 위에서는 실효 2.0x, 즉 TQQQ 약 45~55%와 QQQM 또는 SPYM 완충을 우선합니다.</li>
+            <li>20~30% 위에서는 실효 1.5x, 즉 TQQQ 약 20~30% 수준으로 낮추고 나머지는 1x/방어 자산으로 둡니다.</li>
+            <li>30% 이상 과열에서는 TQQQ 신규 집행을 거의 멈추고 0~15% 상한, 40~50% 이상에서는 청산에 가깝게 감속합니다.</li>
+          </ul>
+        </article>
+
         {ruleGroups.map((group) => (
           <article className="panel span-12 rule-card" key={group.title}>
             <h2 className="panel-title">
