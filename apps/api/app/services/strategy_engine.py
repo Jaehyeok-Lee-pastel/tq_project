@@ -345,7 +345,9 @@ def build_candidate_opinions(
     regime: MarketRegime,
 ) -> list[CandidateOpinion]:
     score = request.profile.risk_score
-    symbols = ["TQQQ", "QLD", "QQQ", "SPYM", "VOO", "SGOV", "BIL", "SHY", "IEF", "TLT", "SMH", "SOXX", "ACE K반도체TOP2"]
+    holdings = normalize_holdings(request.holdings)
+    one_x_choice = choose_one_x_symbol(score, holdings)
+    symbols = ["TQQQ", "QLD", "QQQ", "QQQM", "SPYM", "VOO", "SGOV", "BIL", "SHY", "IEF", "TLT", "SMH", "SOXX", "ACE K반도체TOP2"]
     opinions: list[CandidateOpinion] = []
     for symbol in symbols:
         asset = CANDIDATES[symbol]
@@ -360,6 +362,9 @@ def build_candidate_opinions(
         if symbol in {"SMH", "SOXX", "ACE K반도체TOP2"}:
             stance = "watch"
             reason = "검토했지만 TQQQ/QLD와 성장주·AI·나스닥 베타가 겹쳐 기본 추천에서는 제외합니다."
+        if symbol in {"QQQ", "QQQM", "SPYM"}:
+            stance = "core" if symbol == one_x_choice or (symbol == "QQQ" and one_x_choice == "QQQM") else "watch"
+            reason = one_x_selection_reason(symbol, one_x_choice, score, holdings)
         opinions.append(
             CandidateOpinion(
                 symbol=symbol,
@@ -395,6 +400,7 @@ def build_plans(
 
     core_symbol = choose_one_x_symbol(score, holdings)
     core_ratio = one_x_ratio
+    one_x_note = one_x_selection_reason(core_symbol, core_symbol, score, holdings)
     tqqq_cash = max(0, 100 - tqqq_base - core_ratio - satellite_ratio - ballast_ratio)
     tqqq_plan = make_plan(
         request=request,
@@ -404,7 +410,7 @@ def build_plans(
         title="TQQQ 200일선 레버리지 조절형",
         summary=(
             "QQQ 200일선 위에서는 SGOV/현금을 과도하게 들기보다 TQQQ와 1x ETF로 시장 참여를 유지하고, "
-            "과열 구간에서는 TQQQ를 1x 또는 SGOV로 낮추는 전략입니다."
+            f"과열 구간에서는 TQQQ를 {core_symbol}/SGOV로 낮추는 전략입니다. 1x 선택 기준: {one_x_note}"
         ),
         ratios={
             symbol_if_allowed("TQQQ", profile): tqqq_base,
@@ -491,6 +497,25 @@ def choose_one_x_symbol(score: int, holdings: list[HoldingInput]) -> str:
     if score >= 75:
         return "QQQM"
     return "SPYM"
+
+
+def one_x_selection_reason(symbol: str, selected: str, score: int, holdings: list[HoldingInput]) -> str:
+    held_symbols = {holding.symbol.upper() for holding in holdings}
+    if symbol == "QQQ":
+        if selected == "QQQM":
+            return "QQQ와 QQQM은 같은 Nasdaq-100 1x 완충축입니다. 한 주 가격과 비용 효율 때문에 신규 설계에서는 QQQM을 우선합니다."
+        return "QQQ는 기준 지표로는 핵심이지만, 현재 전략의 1x 완충 보유축으로는 선택하지 않았습니다."
+    if symbol == "QQQM":
+        if selected == "QQQM":
+            if "QQQ" in held_symbols or "QQQM" in held_symbols:
+                return "이미 Nasdaq-100 계열 1x 노출이 있어 같은 방향성을 유지하되 TQQQ보다 낮은 배수로 완충합니다."
+            return "리스크 점수가 높아 TQQQ와 같은 Nasdaq-100 상승 참여를 유지하는 1x 완충축으로 선택합니다."
+        return "나스닥 집중이 이미 충분하거나 리스크 완화가 더 중요해 이번 설계에서는 SPYM을 우선합니다."
+    if symbol == "SPYM":
+        if selected == "SPYM":
+            return "TQQQ가 Nasdaq-100에 집중되어 있으므로 1x 완충축은 S&P 500으로 넓혀 단일 테마 쏠림을 낮춥니다."
+        return "공격적 나스닥 참여가 더 중요해 이번 설계에서는 QQQM을 우선하고, SPYM은 분산 대안으로만 둡니다."
+    return ""
 
 
 def leverage_rotation_model(

@@ -147,6 +147,20 @@ export function RulesPage() {
           </ul>
         </article>
 
+        <article className="panel span-12 rule-card">
+          <h2 className="panel-title">
+            <SlidersHorizontal size={18} />
+            QQQM과 SPYM 선택 기준
+          </h2>
+          <ul>
+            <li>기본 원칙은 TQQQ + 하나의 1x 완충축 + SGOV/CASH입니다. QQQM과 SPYM을 둘 다 기본 보유하지 않습니다.</li>
+            <li>QQQM은 TQQQ와 같은 Nasdaq-100 방향성을 유지하면서 레버리지만 낮추고 싶을 때 선택합니다.</li>
+            <li>SPYM은 TQQQ의 나스닥/기술주 쏠림을 줄이고 S&P 500으로 완충하고 싶을 때 선택합니다.</li>
+            <li>리스크 점수 75점 이상, 또는 이미 QQQ/QQQM을 보유한 경우에는 QQQM을 우선합니다.</li>
+            <li>리스크 점수가 중간 이하이거나 나스닥 집중 완화가 더 중요하면 SPYM을 우선합니다.</li>
+          </ul>
+        </article>
+
         {ruleGroups.map((group) => (
           <article className="panel span-12 rule-card" key={group.title}>
             <h2 className="panel-title">
