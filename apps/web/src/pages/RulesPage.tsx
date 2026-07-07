@@ -46,6 +46,15 @@ const ruleGroups = [
       "좋아 보이는 커스텀보다 반복 가능한 규칙과 기록 가능한 실행 판단을 우선합니다.",
     ],
   },
+  {
+    icon: <SlidersHorizontal size={19} />,
+    title: "분할매수의 최종 위치",
+    items: [
+      "분할매수는 초과수익을 만드는 엔진이 아니라 추격매수와 감정 매매를 줄이는 실행 규율입니다.",
+      "TQQQ는 2~3차 조건부 집행으로 단순하게 관리하고, 조건을 너무 많이 늘려 과최적화하지 않습니다.",
+      "조건이 오지 않는 TQQQ 미집행분은 무기한 현금 대기가 아니라 QQQM/SPYM 1x 완충 또는 SGOV/CASH 역할로 관리합니다.",
+    ],
+  },
 ];
 
 const evidenceItems = [
@@ -83,6 +92,13 @@ const evidenceItems = [
     source: "앱 내부 검증 원칙",
     url: "/test",
     note: "수익 곡선, MDD, 회복기간, 매매 로그를 함께 보며 전략을 판단합니다.",
+  },
+  {
+    title: "분할매수는 알파보다 규율에 가까움",
+    principle: "분할매수는 심리와 변동성 관리를 돕지만, 완벽한 눌림을 기다리다 시장 참여를 놓치는 위험도 함께 봅니다.",
+    source: "분할매수 연구 검토",
+    url: "/rules",
+    note: "앱은 TQQQ 조건부 집행과 QQQM/SPYM 참여 유지를 분리해 과한 현금 대기를 줄입니다.",
   },
 ];
 
@@ -158,6 +174,19 @@ export function RulesPage() {
             <li>SPYM은 TQQQ의 나스닥/기술주 쏠림을 줄이고 S&P 500으로 완충하고 싶을 때 선택합니다.</li>
             <li>리스크 점수 75점 이상, 또는 이미 QQQ/QQQM을 보유한 경우에는 QQQM을 우선합니다.</li>
             <li>리스크 점수가 중간 이하이거나 나스닥 집중 완화가 더 중요하면 SPYM을 우선합니다.</li>
+          </ul>
+        </article>
+
+        <article className="panel span-12 rule-card">
+          <h2 className="panel-title">
+            <BookOpenCheck size={18} />
+            최종 운용 구조
+          </h2>
+          <ul>
+            <li>기본 구조는 TQQQ + 하나의 1x 완충축 + SGOV/CASH입니다.</li>
+            <li>QQQ 200일선 위에서는 참여를 유지하되, QQQ/200일선 이격이 커질수록 TQQQ를 1x 완충 ETF로 낮춥니다.</li>
+            <li>분할매수는 TQQQ 집행에만 엄격하게 적용하고, 미집행분 전체를 현금으로 오래 묶어두지 않습니다.</li>
+            <li>SGOV/CASH는 방어, 극과열, 가까운 실행 대기 재원이라는 목적이 있을 때만 크게 둡니다.</li>
           </ul>
         </article>
 

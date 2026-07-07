@@ -247,18 +247,18 @@ def build_guide(strategy: ManagedStrategy) -> ManagedStrategyGuide:
     score = max(0, 100 - danger_count * 35 - watch_count * 12 - blocked_count * 5 - min(ready_count, 2) * 3)
 
     if distance <= 0:
-        action = "방어 모드: 신규 레버리지 매수 보류, 200일선 회복 전까지 현금/단기채 우선"
+        action = "방어 모드: 신규 레버리지 매수 보류, 200일선 회복 전까지 SGOV/CASH 우선"
     elif distance >= 15:
-        action = "감속 모드: 기존 전략 유지, 신규 매수는 1차 이하 분할만 검토"
+        action = "감속 모드: TQQQ 추격보다 1x 완충 ETF로 참여 유지, 신규 TQQQ는 축소 집행만 검토"
     elif ready_count:
         action = "실행 후보 있음: 아래 단계 중 '실행 가능'만 금액 한도 안에서 검토"
     else:
-        action = "대기 모드: 조건이 올 때까지 보유 유지, 추격 매수 금지"
+        action = "대기 모드: TQQQ 조건은 기다리되 시장 참여는 1x 완충/기존 보유로 유지"
 
     checklist = [
         "QQQ가 200일선 위에서 마감했는지 확인",
         "실행 가능 단계만 검토하고 대기/금지 단계는 건드리지 않기",
-        "실행 후 TQQQ/QLD 목표 비중을 초과하지 않는지 확인",
+        "실행 후 TQQQ/QLD 목표 비중과 이격도별 실효 레버리지 상한을 초과하지 않는지 확인",
         "매수/매도 전 판단 이유를 기록장에 먼저 남기기",
     ]
     next_review = (datetime.now(timezone.utc) + timedelta(days=7)).date().isoformat()
@@ -449,7 +449,7 @@ def advise_contribution(strategy: ManagedStrategy, payload: ContributionPlanRequ
         if symbol in {"CASH", "SGOV", "BIL"}:
             action = "wait"
             suggested = min(max(gap, 0), remaining)
-            reason = "분할매수 조건이 오기 전까지 현금 또는 SGOV 대기자금으로 보관합니다."
+            reason = "하락장, 극과열, 또는 가까운 TQQQ 집행 재원으로 필요한 금액만 현금/SGOV로 보관합니다."
         elif symbol == "TQQQ":
             if tqqq_step:
                 action = "buy"
@@ -458,11 +458,11 @@ def advise_contribution(strategy: ManagedStrategy, payload: ContributionPlanRequ
             else:
                 action = "wait"
                 suggested = 0
-                reason = "TQQQ는 20일선/50일선 눌림, 신고가 돌파, 200일선 이격 완화 조건 전까지 추가매수를 보류합니다."
+                reason = "TQQQ는 조건 전까지 추가매수를 보류합니다. 다만 200일선 위라면 미집행분은 QQQM/SPYM 완충으로 참여 유지 여부를 함께 봅니다."
         elif symbol in {"QQQ", "QQQM", "SPYM", "VOO"}:
             action = "buy"
             suggested = min(gap, remaining)
-            reason = "레버리지 타이밍 자산이 아니라 목표 비중 부족분을 보완하는 코어 자산입니다."
+            reason = "TQQQ 미집행분을 무기한 현금화하지 않기 위한 1x 완충 코어 자산입니다."
         else:
             action = "rebalance"
             suggested = min(gap, remaining)
@@ -494,7 +494,7 @@ def advise_contribution(strategy: ManagedStrategy, payload: ContributionPlanRequ
                 gap_amount=round(remaining),
                 suggested_amount=round(remaining),
                 action="wait",
-                reason="목표 부족분을 채운 뒤 남는 금액은 다음 분할매수 신호까지 대기합니다.",
+                reason="목표 부족분을 채운 뒤 남는 금액은 시장 국면에 따라 QQQM/SPYM 참여 또는 SGOV/CASH 대기로 다시 검토합니다.",
             )
         )
 
@@ -982,8 +982,8 @@ def _reload_execution_step(strategy: ManagedStrategy, target_symbol: str, distan
         strategy.market.qqq_sma200 * 1.05,
     )
     label = (
-        "3차 이후 재장전: QQQ가 50일선 +1% 이내이거나 200일선 대비 +5% 이하로 이격 완화되고, "
-        "TQQQ 목표 미달이 원금 2% 이상일 때만 검토"
+        "3차 이후 재장전: 새 추가금 또는 전략 변경이 있고, QQQ가 200일선 대비 +5% 이하로 이격 완화되며, "
+        "50일선이 무너지지 않았고 TQQQ 목표 미달이 원금 2% 이상일 때만 검토"
     )
     return SplitExecutionStep(
         side="buy",
@@ -1011,13 +1011,13 @@ def _reload_status(
     if _has_journal_marker(strategy, "buy", "재장전"):
         return "done", "이미 기록장에 재장전 매수 기록이 있습니다. 다음 재장전은 새 추가금 또는 전략 버전 변경 후 다시 검토합니다."
     if progress < 95:
-        return "wait", "아직 1~3차 기존 분할매수 사이클이 끝나지 않았습니다. 재장전보다 원래 분할 규칙을 먼저 따릅니다."
+        return "wait", "아직 1~3차 기존 분할매수 사이클이 끝나지 않았습니다. 재장전보다 원래 분할 규칙과 1x 완충 운용을 먼저 따릅니다."
     if distance <= 0:
         return "blocked", "QQQ가 200일선 아래입니다. SGOV/CASH를 TQQQ 매수 재원으로 전환하지 않습니다."
     if strategy.market.qqq_sma50 and strategy.market.qqq_close < strategy.market.qqq_sma50:
         return "blocked", "QQQ가 50일선 아래라 리스크 축소 조건이 우선입니다. 추가 TQQQ 매수는 금지합니다."
     if distance > 5:
-        return "blocked", "3차 이후 재장전은 QQQ 200일선 대비 +5% 이하로 이격이 완화될 때만 허용합니다."
+        return "blocked", "3차 이후 재장전은 과최적화를 막기 위해 QQQ 200일선 대비 +5% 이하로 이격이 완화될 때만 허용합니다."
     if target_gap < strategy.total_capital * 0.02:
         return "wait", "TQQQ 목표 미달분이 원금의 2% 미만입니다. 새 추가금이나 전략 변경 전까지 추가매수하지 않습니다."
     return "ready", "3차 완료, 200일선 위, 50일선 방어, 이격 +5% 이하, 목표 미달 2% 이상을 모두 충족했습니다. 1회 재장전은 원금 5% 이내로 제한합니다."
@@ -1057,7 +1057,7 @@ def _buy_step_status(strategy: ManagedStrategy, index: int, step: str, distance:
     if distance <= 0:
         return "blocked", "QQQ가 200일선 아래라 신규 레버리지 매수는 금지합니다."
     if distance >= 15:
-        return "blocked", "QQQ 200일선 대비 +15% 이상에서는 신규 TQQQ/QLD 분할매수를 금지합니다. 현금/SGOV 대기와 기존 보유 관리가 우선입니다."
+        return "blocked", "QQQ 200일선 대비 +15% 이상에서는 신규 TQQQ/QLD 분할매수를 금지합니다. QQQM/SPYM 1x 완충과 기존 보유 관리가 우선입니다."
     if index == 0:
         if distance > 8:
             return "ready", "QQQ가 200일선 위지만 이격이 +8%를 넘어 1차는 축소 진입만 허용합니다."
@@ -1069,7 +1069,7 @@ def _buy_step_status(strategy: ManagedStrategy, index: int, step: str, distance:
             return "ready", "QQQ가 20일선 근처로 눌려 2차 분할매수 후보입니다."
         if distance <= 8:
             return "ready", "QQQ 200일선 이격도가 완화되어 2차 분할매수 후보입니다."
-        return "wait", "2차는 20일선 +1% 이내 눌림 또는 200일선 대비 +8% 이하 이격 완화 전까지 보류합니다."
+        return "wait", "2차 TQQQ는 조건 전까지 보류합니다. 미집행분은 무기한 현금 대기가 아니라 1x 완충 또는 SGOV/CASH 역할로 관리합니다."
     if progress < 45:
         return "wait", "3차는 1차와 2차가 합쳐 최소 45% 이상 집행된 뒤에만 검토합니다. 깊은 눌림 전 예비 현금을 보존합니다."
     if sma50 and close < sma50:
@@ -1080,7 +1080,7 @@ def _buy_step_status(strategy: ManagedStrategy, index: int, step: str, distance:
         return "ready", "QQQ가 200일선에 가까워져 마지막 분할매수 조건을 검토할 수 있습니다."
     if sma50 and close <= sma50 * 1.02:
         return "ready", "QQQ가 50일선을 아직 방어한 +1~+2% 깊은 눌림 구간이라 마지막 분할매수 후보입니다."
-    return "wait", "3차는 50일선 +1~+2% 방어 구간 또는 200일선 대비 +5% 이하 이격 완화 때만 검토합니다."
+    return "wait", "3차 TQQQ는 깊은 눌림 또는 이격 완화 때만 검토합니다. 조건이 없으면 추가 레버리지보다 1x 완충 유지가 원칙입니다."
 
 
 def _buy_step_amount(strategy: ManagedStrategy, index: int, planned_amount: float, distance: float, status: str) -> float:

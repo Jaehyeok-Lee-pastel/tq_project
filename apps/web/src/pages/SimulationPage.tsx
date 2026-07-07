@@ -198,7 +198,7 @@ async function requestManagedBacktest(strategyId: string, payload: { projection_
 
 export function SimulationPage() {
   const navigate = useNavigate();
-  const [status, setStatus] = useState("백테스트와 미래 시나리오를 통해 전략의 기대값과 위험을 검증합니다.");
+  const [status, setStatus] = useState("같은 원금으로 순정 200일선 전략과 커스텀 전략의 위험, 회복력, 규칙성을 비교합니다.");
   const [loading, setLoading] = useState<"backtest" | "paper" | "">("");
   const [backtest, setBacktest] = useState<BacktestResponse | null>(null);
   const [paperPositions, setPaperPositions] = useState<PaperPosition[]>(loadPaperPositions);
@@ -248,7 +248,7 @@ export function SimulationPage() {
       amount: Math.round(managedDraft.initial_capital),
     });
     if (window.location.search.includes("source=managed")) {
-      setStatus(`${managedDraft.title} v${managedDraft.version} 전략을 테스트랩으로 불러왔습니다. 백테스트를 실행해 과거 성과와 미래 시나리오를 확인하세요.`);
+      setStatus(`${managedDraft.title} v${managedDraft.version} 전략을 테스트랩으로 불러왔습니다. 순정 200일선 전략 대비 과최적화 여부를 확인하세요.`);
     }
   }, [managedDraft]);
 
@@ -431,7 +431,7 @@ export function SimulationPage() {
       <div className="hero-panel lab">
         <div>
           <span className="section-label">Test Lab</span>
-          <h2>백테스트와 미래 시나리오로 전략을 검증합니다</h2>
+          <h2>같은 원금으로 전략 철학을 검증합니다</h2>
           <p>{status}</p>
         </div>
         <button className="primary" onClick={runBacktest} disabled={loading === "backtest"}>
@@ -486,7 +486,7 @@ export function SimulationPage() {
             <div className="validation-steps">
               <span className="active">1 저장 전략 불러옴</span>
               <span>2 동일 원금 백테스트</span>
-              <span>3 미래 시나리오 확인</span>
+              <span>3 시나리오 민감도 확인</span>
               <span>4 결과 비교</span>
             </div>
             <div className="managed-allocation-grid">
@@ -499,7 +499,7 @@ export function SimulationPage() {
               ))}
             </div>
             <p className="managed-test-note">
-              저장 전략의 원금과 목표 비중을 그대로 가져왔습니다. 백테스트는 QQQ 200일선 기반 TQQQ/QLD 핵심 엔진을 검증하고, SPYM/QQQM/SGOV/CASH 같은 보조 자산은 전략 해석의 기준 정보로 유지합니다.
+              저장 전략의 원금과 목표 비중을 그대로 가져왔습니다. 백테스트는 예측이 아니라 QQQ 200일선 순정 전략 대비 커스텀이 과하지 않은지 확인하는 검증 도구입니다.
             </p>
           </article>
         ) : null}
@@ -514,7 +514,7 @@ export function SimulationPage() {
             <label>현금 수익률<input type="number" value={config.cash_yield} onChange={(event) => setConfig({ ...config, cash_yield: Number(event.target.value) })} /></label>
             <label>표시 기간<input type="number" value={config.projection_years} onChange={(event) => setConfig({ ...config, projection_years: Number(event.target.value) })} /></label>
           </div>
-          {backtest ? <BacktestResult result={backtest} /> : <p className="muted">백테스트 실행 시 수익 곡선, CAGR, MDD, 거래 로그가 표시됩니다. TQQQ/QLD 200일선 전략은 1차/2차/3차 분할매수와 방어 매도 규칙을 반영합니다.</p>}
+          {backtest ? <BacktestResult result={backtest} /> : <p className="muted">백테스트 실행 시 수익 곡선, CAGR, MDD, 거래 로그가 표시됩니다. 결과는 미래 수익 예측이 아니라 규칙의 단순성, 방어력, 회복기간을 비교하는 자료입니다.</p>}
         </article>
 
         {/* 실시간 모의 보유와 전략 단위 모의 운용은 추후 머신러닝/실시간 운용 고도화 단계에서 복원할 수 있도록 내부 로직만 보존하고 사용자 화면에서는 숨깁니다. */}
@@ -537,7 +537,7 @@ function BacktestResult({ result }: { result: BacktestResponse }) {
         <div className="refresh-status changed">
           <strong>분할형 200일선 엔진</strong>
           <small>
-            1차 30%, 2차 65%, 3차 100%까지 단계적으로 진입하고, QQQ 50일선 이탈·200일선 이탈·200일선 대비 +25% 구간에서 방어/수익회수 매도를 반영합니다.
+            TQQQ/QLD 진입은 조건부 분할 집행으로 제한하고, QQQ 50일선 이탈·200일선 이탈·200일선 대비 +25% 구간에서 방어/수익회수 매도를 반영합니다.
           </small>
         </div>
       ) : null}

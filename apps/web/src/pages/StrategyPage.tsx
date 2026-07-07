@@ -204,10 +204,10 @@ function recommendedProfile(score: number): Pick<
 }
 function profileRecommendationText(score: number) {
   if (score <= 30) return "TQQQ는 보류하고 SGOV/BIL/VOO 중심으로 방어력을 먼저 둡니다.";
-  if (score <= 55) return "소량 TQQQ만 허용하고 QQQ/SPYM/현금성 자산으로 변동성을 낮춥니다.";
-  if (score <= 75) return "TQQQ를 분할 진입하되 현금성 대기자금과 SPYM 완충을 함께 둡니다.";
-  if (score <= 90) return "TQQQ를 공격적으로 쓰되 QQQ 신호, SPYM, 현금성 자산을 필수 안전장치로 둡니다.";
-  return "초공격형이지만 TQQQ 상한과 최소 현금은 남겨 급락 시 재진입 여력을 보존합니다.";
+  if (score <= 55) return "소량 TQQQ만 허용하고 QQQM/SPYM 1x 완충으로 참여와 방어를 함께 둡니다.";
+  if (score <= 75) return "TQQQ는 조건부 분할 집행하고, 미집행분은 QQQM/SPYM 완충으로 시장 참여를 유지합니다.";
+  if (score <= 90) return "TQQQ를 공격적으로 쓰되 QQQ 이격도 상한, 1x 완충, SGOV/CASH 역할을 함께 둡니다.";
+  return "초공격형이지만 이격도별 TQQQ 상한을 넘지 않고 과열장에서는 1x 완충으로 감속합니다.";
 }
 function normalizeSymbol(rawSymbol: string) {
   const compact = rawSymbol.trim().toUpperCase().replace(/\s+/g, "");
@@ -528,7 +528,7 @@ export function StrategyPage() {
             <button type="button" onClick={() => setShowAdvanced((current) => !current)}>
               {showAdvanced ? "고급 설정 숨기기" : "고급 설정 열기"}
             </button>
-            <small>목표 종목수, 최소 현금, 최대 TQQQ 비중, AI 코치 사용 여부는 고급 설정에서 조정합니다.</small>
+            <small>목표 종목수, 최소 현금, 최대 TQQQ 비중, AI 코치 사용 여부를 조정하되 최종 추천은 QQQ 이격도 상한을 우선합니다.</small>
           </div>
           {showAdvanced ? (
             <div className="profile-grid">
@@ -641,6 +641,10 @@ function PlanDetail({ plan, onAdopt, adopting }: { plan: StrategyPlan; onAdopt: 
       <div className="plan-section-grid">
         <DataTable title="목표 비중" rows={plan.allocations.map((item) => [item.symbol, `${item.target_ratio.toFixed(1)}%`, formatKrw(item.target_amount)])} />
         <DataTable title="조정 액션" rows={plan.actions.map((item) => [item.symbol, actionLabel(item.action), item.amount ? formatKrw(item.amount) : item.reason])} />
+      </div>
+      <div className="plan-section-grid">
+        <DataTable title="TQQQ 집행 원칙" rows={plan.buy_plan.map((item) => [item.step, `${item.ratio_of_target}%`, item.note])} />
+        <DataTable title="방어/회수 원칙" rows={plan.sell_plan.map((item) => [item.step, `${item.ratio_of_target}%`, item.trigger])} />
       </div>
       <div className="risk-strip">
         {plan.risk_metrics.map((metric) => <div className={`risk-pill ${metric.level}`} key={metric.label}><span>{metric.label}</span><strong>{metric.value}</strong></div>)}
