@@ -37,6 +37,8 @@ type MarketSnapshot = {
   qqq_rsi14?: number | null;
   as_of: string;
 };
+type QuoteSnapshot = { symbol: string; price: number; as_of: string; freshness: string };
+type FxSnapshot = { rate: number; as_of: string; freshness: string };
 type Allocation = { symbol: string; name: string; target_ratio: number; target_amount: number; role: string };
 type TradeAction = { symbol: string; action: "buy" | "sell" | "hold" | "wait"; amount: number; reason: string };
 type SplitStep = { step: string; trigger: string; ratio_of_target: number; amount: number; note: string };
@@ -252,6 +254,16 @@ async function fetchHistory(symbol: string): Promise<PriceRow[]> {
   if (!response.ok) throw new Error(`시장 데이터 API 오류: ${response.status}`);
   return ((await response.json()) as { rows: PriceRow[] }).rows;
 }
+async function fetchQuote(symbol: string): Promise<QuoteSnapshot> {
+  const response = await fetch(`${apiBaseUrl}/market/quote/${symbol}`);
+  if (!response.ok) throw new Error(`시세 API 오류: ${response.status}`);
+  return (await response.json()) as QuoteSnapshot;
+}
+async function fetchUsdKrw(): Promise<FxSnapshot> {
+  const response = await fetch(`${apiBaseUrl}/market/fx/usd-krw`);
+  if (!response.ok) throw new Error(`환율 API 오류: ${response.status}`);
+  return (await response.json()) as FxSnapshot;
+}
 async function requestRecommendation(
   holdings: HoldingInput[],
   cash: number,
@@ -295,6 +307,8 @@ export function StrategyPage() {
   const [cash, setCash] = useState(0);
   const [profile, setProfile] = useState<InvestorProfile>(defaultProfile);
   const [market, setMarket] = useState<MarketSnapshot>({ qqq_close: 736.4, qqq_sma200: 633.63, qqq_sma20: 720.18, qqq_sma50: 706.22, qqq_high20: 736.4, as_of: "2026-06-30" });
+  const [quotes, setQuotes] = useState<Record<string, QuoteSnapshot>>({});
+  const [usdKrw, setUsdKrw] = useState<FxSnapshot | null>(null);
   const [recommendation, setRecommendation] = useState<StrategyResponse | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [useAi, setUseAi] = useState(true);
@@ -356,6 +370,15 @@ export function StrategyPage() {
       const nextHigh20 = rollingHigh(rows, 20);
       if (!nextSma200) throw new Error("200일선 계산 데이터가 부족합니다.");
       setMarket({ qqq_close: latest.close, qqq_sma200: nextSma200, qqq_sma20: nextSma20, qqq_sma50: nextSma50, qqq_high20: nextHigh20, as_of: latest.date });
+      const quoteSymbols = ["QQQ", "QQQM", "TQQQ", "QLD", "SGOV", "BIL"];
+      const quoteResults = await Promise.allSettled(quoteSymbols.map((symbol) => fetchQuote(symbol)));
+      const nextQuotes: Record<string, QuoteSnapshot> = {};
+      quoteResults.forEach((result) => {
+        if (result.status === "fulfilled") nextQuotes[result.value.symbol] = result.value;
+      });
+      if (Object.keys(nextQuotes).length) setQuotes(nextQuotes);
+      const fxResult = await Promise.allSettled([fetchUsdKrw()]);
+      if (fxResult[0]?.status === "fulfilled") setUsdKrw(fxResult[0].value);
       const refreshedAt = new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
       setStatus(`${silent ? "자동 " : ""}시장 지표 갱신 완료: ${latest.date} · ${refreshedAt}`);
     } catch (error) {
@@ -428,7 +451,14 @@ export function StrategyPage() {
       </div>
 
       {recommendation && selectedPlan ? (
-        <DecisionSummary recommendation={recommendation} plan={selectedPlan} onAdopt={adoptPlan} adopting={loading === "adopt"} />
+        <DecisionSummary
+          recommendation={recommendation}
+          plan={selectedPlan}
+          quotes={quotes}
+          usdKrw={usdKrw}
+          onAdopt={adoptPlan}
+          adopting={loading === "adopt"}
+        />
       ) : null}
 
       <div className="content-grid">
@@ -631,19 +661,37 @@ function ListBlock({ title, items, tone }: { title: string; items: string[]; ton
 function DecisionSummary({
   recommendation,
   plan,
+  quotes,
+  usdKrw,
   onAdopt,
   adopting,
 }: {
   recommendation: StrategyResponse;
   plan: StrategyPlan;
+  quotes: Record<string, QuoteSnapshot>;
+  usdKrw: FxSnapshot | null;
   onAdopt: (plan: StrategyPlan) => void;
   adopting: boolean;
 }) {
   const topAllocations = [...plan.allocations].sort((a, b) => b.target_ratio - a.target_ratio).slice(0, 3);
-  const leverageMetric = plan.risk_metrics.find((metric) => metric.label.includes("레버리지"));
+  const leverageMetric = plan.risk_metrics.find((metric) => metric.label.includes("레버리지") || metric.label.includes("실효"));
   const capMetric = plan.risk_metrics.find((metric) => metric.label.includes("상한"));
   const primaryAction = recommendation.coach_report.next_actions[0] ?? plan.summary;
   const primaryWarning = recommendation.coach_report.warnings[0];
+  const executableAllocations = topAllocations
+    .map((allocation) => {
+      const quote = quotes[allocation.symbol];
+      if (!quote || !usdKrw?.rate) return null;
+      const krwPerShare = quote.price * usdKrw.rate;
+      const shares = allocation.target_amount / krwPerShare;
+      return { allocation, quote, shares, krwPerShare };
+    })
+    .filter(Boolean) as Array<{ allocation: Allocation; quote: QuoteSnapshot; shares: number; krwPerShare: number }>;
+  const qqqAllocation = plan.allocations.find((allocation) => allocation.symbol === "QQQ");
+  const qqqShareHint =
+    qqqAllocation && quotes.QQQ && quotes.QQQM && usdKrw?.rate && qqqAllocation.target_amount < quotes.QQQ.price * usdKrw.rate
+      ? "QQQ 목표금액이 1주 가격보다 작습니다. 같은 Nasdaq-100 1x 역할은 QQQM으로 우선 검토하세요."
+      : "주문 전 현재가, 환율, 예상 체결가를 다시 입력해 실제 매수 수량을 확인하세요.";
   return (
     <article className="decision-summary panel">
       <div className="decision-main">
@@ -675,6 +723,19 @@ function DecisionSummary({
           <span>위험 확인</span>
           <strong>{capMetric ? `${capMetric.label} ${capMetric.value}` : leverageMetric ? `${leverageMetric.label} ${leverageMetric.value}` : `${plan.scores.risk_score}점`}</strong>
           <small>{primaryWarning}</small>
+        </div>
+        <div className="decision-card execution">
+          <span>매수 가능 수량</span>
+          {executableAllocations.length ? (
+            <div className="execution-pills">
+              {executableAllocations.map(({ allocation, shares }) => (
+                <em key={allocation.symbol}>{allocation.symbol} 약 {shares.toFixed(shares >= 10 ? 1 : 2)}주</em>
+              ))}
+            </div>
+          ) : (
+            <strong>시세 갱신 후 표시</strong>
+          )}
+          <small>{qqqShareHint}</small>
         </div>
       </div>
     </article>

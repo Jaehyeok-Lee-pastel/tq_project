@@ -444,12 +444,14 @@ input[type="range"] { accent-color: var(--blue); }
   font-size: 18px;
   line-height: 1.28;
 }
-.allocation-pills {
+.allocation-pills,
+.execution-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
-.allocation-pills em {
+.allocation-pills em,
+.execution-pills em {
   display: inline-flex;
   min-height: 32px;
   align-items: center;
@@ -460,6 +462,17 @@ input[type="range"] { accent-color: var(--blue); }
   font-size: 12px;
   font-style: normal;
   font-weight: 950;
+}
+.decision-card.execution {
+  border-color: rgba(169, 103, 0, 0.24);
+  background: rgba(255, 246, 223, 0.78);
+}
+.decision-card.execution strong {
+  color: var(--amber);
+}
+.execution-pills em {
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--amber);
 }
 .metric { min-height: 116px; padding: 16px; }
 .metric span, .score-card span, .risk-pill span {
