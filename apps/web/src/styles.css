@@ -375,6 +375,92 @@ input[type="range"] { accent-color: var(--blue); }
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
+.decision-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  gap: 16px;
+  margin-top: 14px;
+  padding: 18px;
+  border-color: rgba(37, 99, 235, 0.24);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(234, 241, 255, 0.86));
+}
+.decision-main {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+}
+.decision-main h2 {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 36px);
+  line-height: 1.16;
+}
+.decision-main p,
+.decision-card small,
+.decision-actions span {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.decision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
+}
+.decision-actions span {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 999px;
+  padding: 0 11px;
+  background: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  font-weight: 900;
+}
+.decision-stack {
+  display: grid;
+  gap: 10px;
+}
+.decision-card {
+  display: grid;
+  gap: 7px;
+  border: 1px solid rgba(217, 224, 234, 0.9);
+  border-radius: 14px;
+  padding: 13px;
+  background: rgba(255, 255, 255, 0.82);
+}
+.decision-card.accent {
+  border-color: rgba(15, 138, 99, 0.24);
+  background: rgba(232, 247, 240, 0.72);
+}
+.decision-card span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 950;
+}
+.decision-card strong {
+  font-size: 18px;
+  line-height: 1.28;
+}
+.allocation-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.allocation-pills em {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: var(--soft-blue);
+  color: var(--blue);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 950;
+}
 .metric { min-height: 116px; padding: 16px; }
 .metric span, .score-card span, .risk-pill span {
   color: var(--muted);
@@ -1168,7 +1254,7 @@ tr:last-child td { border-bottom: 0; }
   .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; }
   .metric-grid, .candidate-list, .opinion-grid, .score-grid, .risk-strip,
   .backtest-controls, .sensitivity-grid, .regime-grid, .managed-metric-strip, .validation-steps,
-  .info-principle {
+  .info-principle, .decision-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .confidence-breakdown-grid,
@@ -1200,7 +1286,7 @@ tr:last-child td { border-bottom: 0; }
   .metric-grid, .candidate-list, .opinion-grid, .score-grid, .risk-strip, .report-columns,
   .plan-section-grid, .projection-grid, .backtest-controls, .profile-grid, .holding-row,
   .quick-input, .paper-controls, .sensitivity-grid, .regime-grid, .managed-metric-strip, .validation-steps,
-  .info-principle, .info-rule-strip {
+  .info-principle, .info-rule-strip, .decision-summary {
     grid-template-columns: 1fr;
   }
   .panel-headline {

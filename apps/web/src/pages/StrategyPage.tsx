@@ -427,6 +427,10 @@ export function StrategyPage() {
         <Metric label="QQQ / 200일선" value={formatUsd(market.qqq_close)} note={formatUsd(market.qqq_sma200)} />
       </div>
 
+      {recommendation && selectedPlan ? (
+        <DecisionSummary recommendation={recommendation} plan={selectedPlan} onAdopt={adoptPlan} adopting={loading === "adopt"} />
+      ) : null}
+
       <div className="content-grid">
         <article className="panel span-12 data-quality-card">
           <h2 className="panel-title">데이터 신뢰도</h2>
@@ -623,6 +627,58 @@ function PanelTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
 }
 function ListBlock({ title, items, tone }: { title: string; items: string[]; tone?: "warn" }) {
   return <div className={`list-block ${tone ?? ""}`}><h3>{title}</h3><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul></div>;
+}
+function DecisionSummary({
+  recommendation,
+  plan,
+  onAdopt,
+  adopting,
+}: {
+  recommendation: StrategyResponse;
+  plan: StrategyPlan;
+  onAdopt: (plan: StrategyPlan) => void;
+  adopting: boolean;
+}) {
+  const topAllocations = [...plan.allocations].sort((a, b) => b.target_ratio - a.target_ratio).slice(0, 3);
+  const leverageMetric = plan.risk_metrics.find((metric) => metric.label.includes("레버리지"));
+  const capMetric = plan.risk_metrics.find((metric) => metric.label.includes("상한"));
+  const primaryAction = recommendation.coach_report.next_actions[0] ?? plan.summary;
+  const primaryWarning = recommendation.coach_report.warnings[0];
+  return (
+    <article className="decision-summary panel">
+      <div className="decision-main">
+        <span className="section-label">오늘의 판단</span>
+        <h2>{recommendation.coach_report.headline}</h2>
+        <p>{primaryAction}</p>
+        <div className="decision-actions">
+          <button className="primary" onClick={() => onAdopt(plan)} disabled={adopting}>
+            {adopting ? "저장 중" : "이 전략 채택"}
+          </button>
+          <span>{recommendation.market_regime} · QQQ 200일선 대비 {formatPct(recommendation.qqq_distance_from_200ma)}</span>
+        </div>
+      </div>
+      <div className="decision-stack">
+        <div className="decision-card accent">
+          <span>추천안</span>
+          <strong>{plan.title}</strong>
+          <small>{plan.summary}</small>
+        </div>
+        <div className="decision-card">
+          <span>핵심 비중</span>
+          <div className="allocation-pills">
+            {topAllocations.map((allocation) => (
+              <em key={allocation.symbol}>{allocation.symbol} {allocation.target_ratio.toFixed(1)}%</em>
+            ))}
+          </div>
+        </div>
+        <div className="decision-card">
+          <span>위험 확인</span>
+          <strong>{capMetric ? `${capMetric.label} ${capMetric.value}` : leverageMetric ? `${leverageMetric.label} ${leverageMetric.value}` : `${plan.scores.risk_score}점`}</strong>
+          <small>{primaryWarning}</small>
+        </div>
+      </div>
+    </article>
+  );
 }
 function PlanDetail({ plan, onAdopt, adopting }: { plan: StrategyPlan; onAdopt: (plan: StrategyPlan) => void; adopting: boolean }) {
   return (
