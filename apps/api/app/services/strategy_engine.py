@@ -418,23 +418,31 @@ def build_plans(
             "QQQ 200일선 위에서는 SGOV/현금을 과도하게 들기보다 TQQQ와 1x ETF로 시장 참여를 유지하고, "
             f"과열 구간에서는 TQQQ를 {core_symbol}/SGOV로 낮추는 전략입니다. 1x 선택 기준: {one_x_note}"
         ),
-        ratios={
-            symbol_if_allowed("TQQQ", profile): tqqq_base,
-            core_symbol: core_ratio,
-            satellite_symbol: satellite_ratio,
-            ballast_symbol: ballast_ratio,
-            defense_symbol: tqqq_cash,
-        },
+        ratios=ratio_map(
+            (symbol_if_allowed("TQQQ", profile), tqqq_base),
+            (core_symbol, core_ratio),
+            (satellite_symbol, satellite_ratio),
+            (ballast_symbol, ballast_ratio),
+            (defense_symbol, tqqq_cash),
+        ),
         distance=distance,
         regime=regime,
     )
 
     qld_ratio = clamp(18 + score * 0.32, 20, 55)
     qld_ratio = min(qld_ratio, profile.max_single_position_ratio)
+    if score <= 35:
+        qld_ratio = 0
     qld_core = clamp(18 + (70 - score) * 0.25, 8, 35)
     qld_satellite = min(satellite_ratio, 12)
     qld_ballast = recommended_ballast_ratio(max(score - 10, 0))
     qld_cash = max(min_cash, 100 - qld_ratio - qld_core - qld_satellite - qld_ballast)
+    if regime == "risk_off":
+        qld_ratio = 0
+        qld_core = 0
+        qld_satellite = 0
+        qld_ballast = 0
+        qld_cash = 100
     qld_plan = make_plan(
         request=request,
         holdings=holdings,
@@ -442,23 +450,30 @@ def build_plans(
         plan_id="qld_stable_aggressive",
         title="QLD 완충형 레버리지",
         summary="TQQQ보다 완만한 2배 레버리지를 중심으로 현금성/채권 완충을 더 두는 후보입니다.",
-        ratios={
-            "QLD": qld_ratio,
-            "QQQ" if score >= 50 else "VOO": qld_core,
-            satellite_symbol: qld_satellite,
-            qld_ballast and ballast_symbol or defense_symbol: qld_ballast,
-            defense_symbol: qld_cash,
-        },
+        ratios=ratio_map(
+            ("QLD", qld_ratio),
+            ("QQQ" if score >= 50 else "VOO", qld_core),
+            (satellite_symbol, qld_satellite),
+            (qld_ballast and ballast_symbol or defense_symbol, qld_ballast),
+            (defense_symbol, qld_cash),
+        ),
         distance=distance,
         regime=regime,
     )
 
     broad_core = max(core_ratio, clamp(35 + (70 - score) * 0.25, 25, 70))
     mixed_tqqq = tqqq_base * 0.55
-    mixed_qld = clamp(score * 0.12, 0, 15) if profile.target_count >= 3 else 0
+    mixed_qld = clamp(score * 0.12, 0, 15) if profile.target_count >= 3 and score > 35 else 0
     mixed_satellite = 0
     mixed_ballast = recommended_ballast_ratio(score)
     mixed_cash = max(min_cash, 100 - broad_core - mixed_tqqq - mixed_qld - mixed_satellite - mixed_ballast)
+    if regime == "risk_off":
+        broad_core = 0
+        mixed_tqqq = 0
+        mixed_qld = 0
+        mixed_satellite = 0
+        mixed_ballast = 0
+        mixed_cash = 100
     mixed_plan = make_plan(
         request=request,
         holdings=holdings,
@@ -468,14 +483,14 @@ def build_plans(
         summary=(
             "QQQ/VOO, 단기채/중기채, 소량 레버리지를 섞어 같은 원금에서 더 안정적인 후보를 만듭니다."
         ),
-        ratios={
-            "QQQ" if score >= 55 else "VOO": broad_core,
-            "TQQQ": mixed_tqqq,
-            "QLD": mixed_qld,
-            satellite_symbol: mixed_satellite,
-            ballast_symbol: mixed_ballast,
-            defense_symbol: mixed_cash,
-        },
+        ratios=ratio_map(
+            ("QQQ" if score >= 55 else "VOO", broad_core),
+            ("TQQQ", mixed_tqqq),
+            ("QLD", mixed_qld),
+            (satellite_symbol, mixed_satellite),
+            (ballast_symbol, mixed_ballast),
+            (defense_symbol, mixed_cash),
+        ),
         distance=distance,
         regime=regime,
     )
@@ -484,6 +499,13 @@ def build_plans(
 
 def symbol_if_allowed(symbol: str, profile) -> str:
     return symbol if profile.allow_tqqq else "QQQ"
+
+
+def ratio_map(*items: tuple[str, float]) -> dict[str, float]:
+    ratios: dict[str, float] = {}
+    for symbol, ratio in items:
+        ratios[symbol] = ratios.get(symbol, 0) + ratio
+    return ratios
 
 
 def choose_semiconductor_symbol(holdings: list[HoldingInput], score: int) -> str:
