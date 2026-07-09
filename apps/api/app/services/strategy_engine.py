@@ -347,7 +347,7 @@ def build_candidate_opinions(
     score = request.profile.risk_score
     holdings = normalize_holdings(request.holdings)
     one_x_choice = choose_one_x_symbol(score, holdings)
-    symbols = ["TQQQ", "QLD", "QQQ", "QQQM", "SPYM", "VOO", "SGOV", "BIL", "SHY", "IEF", "TLT", "SMH", "SOXX", "ACE K반도체TOP2"]
+    symbols = ["TQQQ", "QLD", "QQQ", "QQQM", "SPYM", "VOO", "SGOV", "BIL", "SMH", "SOXX", "ACE K반도체TOP2"]
     opinions: list[CandidateOpinion] = []
     for symbol in symbols:
         asset = CANDIDATES[symbol]
@@ -359,6 +359,12 @@ def build_candidate_opinions(
         ):
             stance = "watch"
             reason = "지금은 TQQQ를 핵심 비중으로 두기보다 조건 충족 시 분할 진입 후보로 둡니다."
+        elif symbol == "TQQQ" and score < 70:
+            stance = "watch"
+            reason = "TQQQ는 허용하지만 현재 성향에서는 QLD 또는 QQQM/SPYM 완충을 우선하고 조건 충족분만 분할 집행합니다."
+        elif symbol == "TQQQ" and score >= 85:
+            stance = "core"
+            reason = "초공격형은 TQQQ 상한을 높게 볼 수 있지만 실제 매수는 QQQ 200일선 이격도와 분할 규칙을 통과한 금액만 집행합니다."
         if symbol in {"SMH", "SOXX", "ACE K반도체TOP2"}:
             stance = "watch"
             reason = "검토했지만 TQQQ/QLD와 성장주·AI·나스닥 베타가 겹쳐 기본 추천에서는 제외합니다."
@@ -625,11 +631,7 @@ def choose_defense_symbol(score: int) -> str:
 
 
 def choose_ballast_symbol(score: int) -> str:
-    if score <= 35:
-        return "SHY"
-    if score <= 65:
-        return "IEF"
-    return "SHY"
+    return "SGOV" if score <= 65 else "BIL"
 
 
 def recommended_min_cash(score: int) -> float:
@@ -707,6 +709,13 @@ def make_plan(
         for symbol, ratio in normalized.items()
         if ratio > 0.1
     ]
+    actual_tqqq = allocation_ratio(normalized, "TQQQ")
+    if plan_id == "tqqq_200ma_coach" and actual_tqqq <= 0.1:
+        title = "200일선 방어 대기 전략"
+        summary = (
+            "현재 조건에서는 TQQQ 신규 핵심 비중을 만들지 않고 SGOV/CASH와 1x ETF 중심으로 대기합니다. "
+            "QQQ가 200일선 위에서 회복하고 이격도가 허용 범위로 들어오면 TQQQ 분할 진입을 다시 검토합니다."
+        )
     scores = build_scores(normalized, distance, regime, request.profile.risk_score, plan_id)
     return StrategyPlan(
         id=plan_id,
@@ -1004,7 +1013,7 @@ def build_risk_metrics(
     effective_leverage = (tqqq * 3 + qld * 2 + one_x) / 100
     target_effective = target_effective_leverage_by_disparity(distance, score)
 
-    return [
+    metrics = [
         RiskMetric(
             label="레버리지 노출",
             value=f"{leverage_exposure:.0f}%",
@@ -1060,6 +1069,16 @@ def build_risk_metrics(
             ),
         ),
     ]
+    if score >= 85:
+        tqqq_cap = tqqq_cap_from_disparity(distance, score)
+        metrics.append(
+            RiskMetric(
+                label="초공격 TQQQ 상한",
+                value=f"최대 {tqqq_cap:.0f}%",
+                level="very_high" if tqqq_cap >= 70 else "high" if tqqq_cap >= 50 else "medium",
+            )
+        )
+    return metrics
 
 
 def build_pros(plan_id: str) -> list[str]:
@@ -1096,6 +1115,10 @@ def build_rule_based_report(
 ) -> CoachReport:
     if regime == "risk_off":
         headline = "지금은 공격보다 방어 규칙을 먼저 확인할 구간입니다."
+    elif user_risk_score <= 35:
+        headline = "방어형 성향은 200일선 위라도 SGOV와 1x ETF 중심으로 천천히 참여합니다."
+    elif user_risk_score >= 85:
+        headline = "초공격형은 높은 TQQQ 상한을 볼 수 있지만 실제 집행은 이격도와 분할 규칙을 따릅니다."
     elif regime == "stretched_entry":
         headline = "TQQQ 전략은 가능하지만 이격도 상한 안에서 감속해야 합니다."
     else:
@@ -1122,6 +1145,11 @@ def build_rule_based_report(
             "이 앱은 투자 자문이 아니라 전략 점검 도구이며 수익을 보장하지 않습니다.",
             "TQQQ는 일일 3배 레버리지 상품이라 장기 성과가 QQQ의 단순 3배와 다를 수 있습니다.",
             "신뢰도 점수가 높아도 미래 시장에서 손실은 발생할 수 있습니다.",
+            *(
+                ["초공격형 TQQQ 상한은 한 번에 매수하라는 뜻이 아니라 현재 국면에서 허용 가능한 최대 노출 한도입니다."]
+                if user_risk_score >= 85
+                else []
+            ),
         ],
         monitoring_rules=[
             "매일 장마감 후 QQQ와 200일선의 위치를 확인합니다.",

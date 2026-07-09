@@ -93,15 +93,14 @@ const candidateAssets: CandidateAsset[] = [
   { symbol: "TQQQ", name: "ProShares UltraPro QQQ", category: "nasdaq_leverage", role: "공격 엔진" },
   { symbol: "QLD", name: "ProShares Ultra QQQ", category: "nasdaq_leverage", role: "완충형 레버리지" },
   { symbol: "QQQ", name: "Invesco QQQ Trust", category: "nasdaq", role: "나스닥 기준 자산" },
+  { symbol: "QQQM", name: "Invesco NASDAQ 100 ETF", category: "nasdaq", role: "저비용 나스닥 1x" },
+  { symbol: "SPYM", name: "SPDR Portfolio S&P 500 ETF", category: "broad_market", role: "저비용 S&P 500 코어" },
   { symbol: "SMH", name: "VanEck Semiconductor ETF", category: "semiconductor", role: "미국 반도체 위성" },
   { symbol: "SOXX", name: "iShares Semiconductor ETF", category: "semiconductor", role: "반도체 위성" },
   { symbol: "ACE K반도체TOP2", name: "ACE K반도체TOP2", category: "semiconductor", role: "한국 반도체 집중" },
   { symbol: "VOO", name: "Vanguard S&P 500 ETF", category: "broad_market", role: "광범위 지수 완충" },
   { symbol: "SGOV", name: "iShares 0-3 Month Treasury Bond ETF", category: "cash_like", role: "현금성 대기" },
   { symbol: "BIL", name: "SPDR Bloomberg 1-3 Month T-Bill ETF", category: "cash_like", role: "분할매수 대기" },
-  { symbol: "SHY", name: "iShares 1-3 Year Treasury Bond ETF", category: "short_bond", role: "단기채 완충" },
-  { symbol: "IEF", name: "iShares 7-10 Year Treasury Bond ETF", category: "intermediate_bond", role: "중기채 완충" },
-  { symbol: "TLT", name: "iShares 20+ Year Treasury Bond ETF", category: "long_bond", role: "장기채 위성" },
 ];
 
 const defaultHoldings: HoldingInput[] = [];
@@ -197,7 +196,7 @@ function recommendedProfile(score: number): Pick<
     risk_profile: "very_aggressive",
     target_count: 2,
     min_cash_ratio: 12,
-    max_tqqq_ratio: 45,
+    max_tqqq_ratio: 75,
     max_semiconductor_ratio: 18,
     max_single_position_ratio: 65,
   };
@@ -207,7 +206,7 @@ function profileRecommendationText(score: number) {
   if (score <= 55) return "소량 TQQQ만 허용하고 QQQM/SPYM 1x 완충으로 참여와 방어를 함께 둡니다.";
   if (score <= 75) return "TQQQ는 조건부 분할 집행하고, 미집행분은 QQQM/SPYM 완충으로 시장 참여를 유지합니다.";
   if (score <= 90) return "TQQQ를 공격적으로 쓰되 QQQ 이격도 상한, 1x 완충, SGOV/CASH 역할을 함께 둡니다.";
-  return "초공격형이지만 이격도별 TQQQ 상한을 넘지 않고 과열장에서는 1x 완충으로 감속합니다.";
+  return "초공격형은 TQQQ 상한을 높게 열어두되, 실제 매수는 QQQ 이격도·분할 규칙·경고를 통과한 금액만 집행합니다.";
 }
 function normalizeSymbol(rawSymbol: string) {
   const compact = rawSymbol.trim().toUpperCase().replace(/\s+/g, "");
