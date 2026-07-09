@@ -731,13 +731,14 @@ def make_plan(
         for symbol, ratio in normalized.items()
         if ratio > 0.1
     ]
-    actual_tqqq = allocation_ratio(normalized, "TQQQ")
-    if plan_id == "tqqq_200ma_coach" and actual_tqqq <= 0.1:
-        title = "200일선 방어 대기 전략"
-        summary = (
-            "현재 조건에서는 TQQQ 신규 핵심 비중을 만들지 않고 SGOV/CASH와 1x ETF 중심으로 대기합니다. "
-            "QQQ가 200일선 위에서 회복하고 이격도가 허용 범위로 들어오면 TQQQ 분할 진입을 다시 검토합니다."
-        )
+    title, summary = align_plan_copy_with_allocation(
+        title,
+        summary,
+        plan_id,
+        normalized,
+        regime,
+        request.profile.risk_score,
+    )
     scores = build_scores(normalized, distance, regime, request.profile.risk_score, plan_id)
     return StrategyPlan(
         id=plan_id,
@@ -763,6 +764,52 @@ def make_plan(
         pros=build_pros(plan_id),
         cons=build_cons(plan_id, regime),
     )
+
+
+def align_plan_copy_with_allocation(
+    title: str,
+    summary: str,
+    plan_id: str,
+    ratios: dict[str, float],
+    regime: MarketRegime,
+    user_risk_score: int,
+) -> tuple[str, str]:
+    tqqq = allocation_ratio(ratios, "TQQQ")
+    qld = allocation_ratio(ratios, "QLD")
+    one_x = one_x_equity_ratio(ratios)
+    defense = defensive_ratio(ratios)
+
+    if regime == "risk_off":
+        return (
+            "200일선 방어 대기 전략",
+            "QQQ가 200일선 아래에 있어 사용자 성향이 공격적이어도 레버리지 신규 진입을 보류합니다. "
+            "SGOV/CASH 중심으로 방어하고, QQQ가 200일선 위로 회복한 뒤 분할 진입을 다시 검토합니다.",
+        )
+
+    if plan_id == "tqqq_200ma_coach" and tqqq <= 0.1:
+        return (
+            "200일선 방어 대기 전략",
+            "현재 조건에서는 TQQQ 신규 핵심 비중을 만들지 않고 SGOV/CASH와 1x ETF 중심으로 대기합니다. "
+            "QQQ가 200일선 위에서 회복하고 이격도가 허용 범위로 들어오면 TQQQ 분할 진입을 다시 검토합니다.",
+        )
+
+    if plan_id == "qld_stable_aggressive" and qld <= 0.1:
+        if user_risk_score <= 35:
+            return (
+                "방어형 1x·SGOV 완충 전략",
+                "방어형 성향에서는 QLD도 신규 편입하지 않고 VOO/QQQ 계열 1x ETF와 SGOV 중심으로 참여 강도를 낮춥니다.",
+            )
+        if one_x >= 45 and defense >= 20:
+            return (
+                "1x·SGOV 완충 전략",
+                "QLD 비중을 만들지 않고 1x ETF와 SGOV/CASH로 시장 참여와 방어력을 함께 둡니다.",
+            )
+        return (
+            "레버리지 보류형 완충 전략",
+            "현재 배분에서는 QLD를 사용하지 않고 1x ETF와 현금성 자산으로 변동성을 낮춥니다.",
+        )
+
+    return title, summary
 
 
 def normalize_ratios(ratios: dict[str, float]) -> dict[str, float]:
@@ -1146,6 +1193,28 @@ def build_rule_based_report(
     else:
         headline = "QQQ 200일선 기준으로 공격 전략을 이용할 수 있는 구간입니다."
 
+    regime_override_notes: list[str] = []
+    if regime == "risk_off" and user_risk_score >= 55:
+        regime_override_notes.append(
+            "현재는 QQQ가 200일선 아래라 사용자 성향이 공격적이어도 시장 국면이 우선되어 레버리지 진입을 막습니다."
+        )
+    elif regime == "stretched_entry" and user_risk_score >= 85:
+        regime_override_notes.append(
+            "초공격형이라도 QQQ 200일선 이격도가 높으면 TQQQ 상한을 자동으로 낮춰 추격매수를 제한합니다."
+        )
+    elif user_risk_score <= 35 and regime != "risk_off":
+        regime_override_notes.append(
+            "QQQ가 200일선 위에 있어도 방어형 성향에서는 레버리지보다 1x ETF와 SGOV/CASH 완충을 우선합니다."
+        )
+    has_tqqq_target = any(
+        allocation.symbol == "TQQQ" and allocation.target_ratio > 0.1 for allocation in plan.allocations
+    )
+    execution_note = (
+        "TQQQ 목표금액은 1~3차 조건부 집행으로 나누고, 미집행분은 QQQM/SPYM 또는 SGOV/CASH 역할을 확인하세요."
+        if has_tqqq_target
+        else "현재 추천안은 TQQQ 집행을 보류합니다. 1x ETF와 SGOV/CASH 비중을 먼저 확인하고, QQQ 200일선 조건이 개선되면 TQQQ 분할 진입을 다시 검토하세요."
+    )
+
     return CoachReport(
         headline=headline,
         diagnosis=" ".join(diagnosis),
@@ -1156,11 +1225,14 @@ def build_rule_based_report(
                 f"성향은 {risk_band(user_risk_score)}입니다."
             ),
             f"QQQ가 200일선 대비 {distance:.1f}% 위치에 있어 진입 강도를 조절해야 합니다.",
+            *regime_override_notes,
             "추천은 현재 보유 종목을 고집하지 않고 검증 후보군 안에서 다시 구성했습니다.",
         ],
         next_actions=[
             f"우선 추천안 '{plan.title}'의 목표 비중과 현재 보유 종목 차이를 확인하세요.",
-            "TQQQ 목표금액은 1~3차 조건부 집행으로 나누고, 미집행분은 QQQM/SPYM 또는 SGOV/CASH 역할을 확인하세요.",
+            execution_note,
+            "QQQ 한 주 가격이 목표금액보다 크거나 부담되면 같은 Nasdaq-100 1x 역할은 QQQM으로 우선 검토하세요.",
+            "실제 주문 전에는 현재가, 예상 체결가, 환율을 입력해 목표 비중과 매수 가능 수량을 다시 확인하세요.",
             "검증 후보군 밖 종목은 유지 이유가 명확하지 않으면 축소 후보로 봅니다.",
         ],
         warnings=[
