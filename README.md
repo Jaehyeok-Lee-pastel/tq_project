@@ -1,79 +1,129 @@
-# Project Template — FastAPI · React · Supabase + AI Orchestration
+# TQ Project
 
-다양한 프로젝트의 **베이스 템플릿**이다. FastAPI/React/Supabase 모노레포 스캐폴딩과, Claude Code가 Codex·Gemini CLI를 위임 호출하는 멀티 CLI 오케스트레이션을 함께 담았다.
+TQ Project is a personal investment strategy coach focused on the QQQ 200-day moving average and TQQQ risk control.
 
-> 👉 **처음이라면 [`docs/USAGE.md`](docs/USAGE.md)** — 복사 → 개발 루프 → 오케스트레이션 활용 → 자주 하는 작업까지 한 번에.
+The app is designed to help a user compare and manage rules such as:
 
-## 구조
+- QQQ 200-day moving average trend filter
+- TQQQ/QLD exposure control
+- QQQM or SPYM as a 1x buffer
+- SGOV/CASH as defense or execution reserve
+- staged buy/sell records
+- saved strategy management
+- backtests and scenario checks
+
+> This app is an educational strategy review tool. It is not financial advice and does not guarantee returns.
+
+## Production URLs
+
+- Web: https://tqproject-production-web.up.railway.app
+- API: https://tqproject-production-api.up.railway.app
+- API health: https://tqproject-production-api.up.railway.app/health
+
+## Core Philosophy
+
+The current strategy philosophy is documented here:
+
+- [Final TQQQ strategy philosophy](docs/01_strategy_philosophy/final_strategy_philosophy_2026-07-07.md)
+
+Short version:
+
+1. Use QQQ, not TQQQ, as the main 200-day moving average signal.
+2. Above the 200-day line, participate in the market but cap effective leverage by QQQ/MA200 distance.
+3. Use one 1x buffer by default: QQQM for Nasdaq-100 participation, SPYM for broader S&P 500 balance.
+4. Treat staged TQQQ buying as execution discipline, not an alpha engine.
+5. Use SGOV/CASH mainly for below-MA200 defense, extreme overheat, or near-term execution reserves.
+6. Use backtests to compare rule robustness, not to predict future returns.
+
+## Project Structure
 
 ```txt
-.claude/   Claude Code 오케스트레이션 (hooks, rules, skills, agents)
-.codex/    Codex CLI 설정·스킬
-.gemini/   Gemini CLI 설정·스킬
 apps/
-  api/     FastAPI backend
-  web/     React + Vite frontend
-supabase/  migrations + seed
-docs/      설계·규약 문서 (08_coding_guidelines = 코드 규약 SSOT)
-CLAUDE.md AGENTS.md  # 에이전트가 읽는 프로젝트 컨텍스트
+  api/      FastAPI backend
+  web/      React + Vite frontend
+supabase/   migrations and seed data
+docs/       philosophy, plans, and coding guidelines
 ```
 
-## 로컬 실행
+## Local Development
 
-### Backend (apps/api)
+### Backend
 
 ```powershell
 cd apps/api
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-Copy-Item .env.example .env       # Supabase 키 입력
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Health: http://localhost:8000/health · Docs: http://localhost:8000/docs
+Health check:
 
-### Frontend (apps/web)
+```txt
+http://localhost:8000/health
+```
+
+### Frontend
 
 ```powershell
 cd apps/web
 npm install
-Copy-Item .env.example .env.local  # API base + Supabase anon key 입력
 npm run dev
 ```
 
-http://localhost:5173 — 초기 화면이 백엔드 `/health`를 호출해 연결을 확인한다.
+Local web:
 
-### Supabase
+```txt
+http://localhost:5173
+```
 
-`supabase/migrations/*.sql`를 시간순 적용 후 필요 시 `supabase/seed.sql` 적용. 상세: [`supabase/README.md`](supabase/README.md).
+## Required Environment Variables
 
-### Docker (선택)
+### API service
+
+- `APP_ENV`
+- `APP_NAME`
+- `CORS_ORIGINS`
+- `MARKET_DATA_PROVIDER`
+- `OPENAI_MODEL`
+- `AI_MAX_OUTPUT_TOKENS`
+- `AI_REQUEST_TIMEOUT_SECONDS`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+### Web service
+
+- `VITE_API_BASE_URL`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+For Railway production, `VITE_API_BASE_URL` should point to:
+
+```txt
+https://tqproject-production-api.up.railway.app
+```
+
+## Quality Checks
+
+Backend:
 
 ```powershell
-docker compose up --build   # api(:8000) + web(:5173) 동시 기동
+cd apps/api
+python -m pytest
 ```
-개별 빌드: `apps/api/Dockerfile`(uvicorn), `apps/web/Dockerfile`(vite build → nginx, SPA fallback). `apps/api/.env`가 있어야 compose가 키를 주입한다.
 
-## AI 오케스트레이션 (개발 시)
+Frontend:
 
-Claude Code 안에서 동작한다. 무거운 작업은 위임한다:
+```powershell
+cd apps/web
+npm run build
+```
 
-- **Codex** (`gpt-5.5`) — 설계·디버깅·코드리뷰·로그 진단 (read-only)
-- **Gemini** (`gemini-3-flash-preview`) — 리서치·대규모 분석·멀티모달
+## Current QA Priorities
 
-키워드를 감지하면 훅이 위임을 제안하고(`agent-router.py`), 위험한 명령은 차단된다(`guard-bash.py`). 스킬: `/startproject`(신규 기능 착수), `/codex-system`, `/gemini-system`. 상세: [`CLAUDE.md`](CLAUDE.md).
+1. Browser flow: login -> strategy recommendation -> adopt strategy -> manage strategy -> test lab.
+2. Mobile and narrow viewport layout check.
+3. Supabase row-level security and user data separation review.
+4. Stored-strategy backtest accuracy improvement.
+5. README and operational notes kept in sync with deployment.
 
-> Codex/Gemini CLI가 PATH에 있어야 위임이 동작한다. 훅은 `python3`로 실행된다(미설치 시 훅만 조용히 스킵).
-
-## 새 프로젝트로 사용하기
-
-1. 이 폴더를 새 위치로 복사한다. 예: `Copy-Item D:\이재혁\project-template D:\이재혁\my-app -Recurse`
-2. 이름 일괄 변경: `pwsh ./scripts/init-project.ps1 -Name my-app` (APP_NAME·web package name·title 치환)
-3. `apps/api/.env`, `apps/web/.env.local`을 채운다.
-4. `supabase/migrations/`의 스타터 마이그레이션(`profiles`)을 적용하거나, 프로젝트 스키마로 교체한다.
-5. `docs/00~07`을 해당 프로젝트 설계로 채우고, `docs/00_overview`에 도메인 용어를 정의한다.
-6. Claude Code에서 `/startproject`로 첫 기능을 착수한다.
-
-품질 게이트: `apps/api`에서 `ruff check . && pytest`, `apps/web`에서 `npm run lint && npm run build` (CI: `.github/workflows/ci.yml`).
-코드 규약: [`docs/08_coding_guidelines/`](docs/08_coding_guidelines/README.md).

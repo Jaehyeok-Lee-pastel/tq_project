@@ -1,7 +1,7 @@
 import httpx
 from fastapi import APIRouter, HTTPException, Query
 
-from app.api.deps import CurrentUserDep, OptionalCurrentUserDep
+from app.api.deps import OptionalCurrentUserDep
 from app.repositories.managed_strategy_repository import (
     add_journal_entry,
     advise_contribution,
@@ -15,7 +15,6 @@ from app.repositories.managed_strategy_repository import (
     create_strategy,
     delete_journal_entry,
     get_strategy,
-    import_local_strategies,
     list_strategies,
     update_strategy,
 )
@@ -48,11 +47,6 @@ async def get_managed_strategies(current_user: OptionalCurrentUserDep) -> list[M
 @router.post("", response_model=ManagedStrategy)
 async def post_managed_strategy(payload: ManagedStrategyCreate, current_user: OptionalCurrentUserDep) -> ManagedStrategy:
     return create_strategy(payload, current_user.user_id if current_user else None)
-
-
-@router.post("/import-local", response_model=list[ManagedStrategy])
-async def post_import_local_strategies(current_user: CurrentUserDep) -> list[ManagedStrategy]:
-    return import_local_strategies(current_user.user_id)
 
 
 @router.get("/{strategy_id}", response_model=ManagedStrategy)

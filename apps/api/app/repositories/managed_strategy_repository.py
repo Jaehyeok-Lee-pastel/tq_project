@@ -90,30 +90,6 @@ def list_strategies(user_id: str | None = None) -> list[ManagedStrategy]:
     return sorted(_load(user_id), key=lambda item: item.created_at, reverse=True)
 
 
-def import_local_strategies(user_id: str) -> list[ManagedStrategy]:
-    if not _use_supabase(user_id):
-        return list_strategies()
-    if not DATA_PATH.exists():
-        return list_strategies(user_id)
-
-    now = utc_now()
-    local_raw = json.loads(DATA_PATH.read_text(encoding="utf-8"))
-    existing = list_strategies(user_id)
-    imported: list[ManagedStrategy] = []
-    for item in local_raw:
-        source = ManagedStrategy.model_validate(item)
-        data = source.model_dump()
-        data["id"] = uuid4().hex
-        data["created_at"] = now
-        data["updated_at"] = now
-        data["selected_reason"] = f"{source.selected_reason} / 로그인 후 기존 로컬 데이터를 가져왔습니다."
-        imported.append(ManagedStrategy.model_validate(data))
-
-    if imported:
-        _save([*imported, *existing], user_id)
-    return list_strategies(user_id)
-
-
 def get_strategy(strategy_id: str, user_id: str | None = None) -> ManagedStrategy:
     for strategy in _load(user_id):
         if strategy.id == strategy_id:

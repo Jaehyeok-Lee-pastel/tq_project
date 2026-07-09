@@ -2421,3 +2421,10 @@ tr:last-child td { border-bottom: 0; }
     grid-column: span 2;
   }
 }
+ .route-loading {
+  min-height: 280px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
