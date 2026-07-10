@@ -72,7 +72,7 @@ async def run_backtest(request: BacktestRunRequest) -> BacktestRunResponse:
         benchmark_metrics=benchmark_metrics,
         yearly_returns=yearly,
         regime_performance=regime_performance,
-        trades=trades[-80:],
+        trades=trades,
         projection=projection,
         interpretation=build_interpretation(metrics, benchmark_metrics, request),
     )
@@ -232,6 +232,7 @@ def simulate_daily_accumulation_200ma_strategy(
         cash *= 1 + daily_cash_return
         if daily_contribution:
             cash += daily_contribution
+        cash_flow = daily_contribution
 
         distance = prev.qqq / prev.sma200 - 1
         above_ma = prev.qqq > prev.sma200
@@ -302,9 +303,10 @@ def simulate_daily_accumulation_200ma_strategy(
                 equity=round(total_equity, 2),
                 drawdown=round((total_equity / peak - 1) * 100, 2),
                 position=position,
+                cash_flow=round(cash_flow, 2),
             )
         )
-    return curve, trades[-120:]
+    return curve, trades
 
 
 def daily_tqqq_buy_ratio(distance: float, base_tqqq_ratio: float) -> float:
@@ -354,8 +356,7 @@ def simulate_staged_200ma_strategy(
     for index in range(1, len(frames)):
         prev = frames[index - 1]
         current = frames[index]
-        if daily_contribution:
-            equity += daily_contribution
+        cash_flow = 0.0
         distance = prev.qqq / prev.sma200 - 1
         desired_ratio = position_ratio
         reason = ""
@@ -416,6 +417,9 @@ def simulate_staged_200ma_strategy(
             + cash_ratio * daily_cash_return
         )
         equity *= 1 + day_return
+        if daily_contribution:
+            equity += daily_contribution
+            cash_flow = daily_contribution
         peak = max(peak, equity)
         position_label = target_symbol if position_ratio > 0 else "CASH"
         if active_one_x_ratio > 0:
@@ -426,6 +430,7 @@ def simulate_staged_200ma_strategy(
                 equity=round(equity, 2),
                 drawdown=round((equity / peak - 1) * 100, 2),
                 position=position_label,
+                cash_flow=round(cash_flow, 2),
             )
         )
     return curve, trades
@@ -460,9 +465,11 @@ def simulate_buy_hold(
     trades: list[TradeLogItem] = []
     daily_contribution = monthly_contribution / 21 if monthly_contribution > 0 else 0
     for index in range(1, len(frames)):
+        cash_flow = 0.0
         equity *= 1 + price_return(frames[index - 1], frames[index], symbol)
         if daily_contribution:
             equity += daily_contribution * (1 - cost_ratio)
+            cash_flow = daily_contribution
             trades.append(
                 TradeLogItem(
                     date=frames[index].date,
@@ -479,9 +486,10 @@ def simulate_buy_hold(
                 equity=round(equity, 2),
                 drawdown=round((equity / peak - 1) * 100, 2),
                 position=symbol,
+                cash_flow=round(cash_flow, 2),
             )
         )
-    return curve, trades[-120:]
+    return curve, trades
 
 
 def price_return(prev: BacktestFrame, current: BacktestFrame, symbol: str) -> float:
@@ -495,12 +503,11 @@ def price_return(prev: BacktestFrame, current: BacktestFrame, symbol: str) -> fl
 def calculate_metrics(curve: list[EquityPoint], trades: list[TradeLogItem]) -> BacktestMetrics:
     if len(curve) < 2:
         raise ValueError("성과 지표 계산에 필요한 데이터가 부족합니다.")
-    returns = [curve[index].equity / curve[index - 1].equity - 1 for index in range(1, len(curve))]
+    returns = adjusted_returns(curve)
     final_capital = curve[-1].equity
-    start_capital = curve[0].equity
     years = max(len(curve) / 252, 1 / 252)
-    total_return = final_capital / start_capital - 1
-    cagr = (final_capital / start_capital) ** (1 / years) - 1
+    total_return = compound_returns(returns) - 1
+    cagr = (1 + total_return) ** (1 / years) - 1
     max_drawdown = min(point.drawdown for point in curve) / 100
     yearly_returns = calculate_yearly_returns(curve)
     best_year = max((item.return_pct for item in yearly_returns), default=None)
@@ -520,6 +527,24 @@ def calculate_metrics(curve: list[EquityPoint], trades: list[TradeLogItem]) -> B
         worst_year=worst_year,
         longest_drawdown_days=longest_drawdown(curve),
     )
+
+
+def adjusted_returns(curve: list[EquityPoint]) -> list[float]:
+    returns: list[float] = []
+    for index in range(1, len(curve)):
+        previous = curve[index - 1].equity
+        if previous <= 0:
+            returns.append(0)
+            continue
+        returns.append((curve[index].equity - curve[index].cash_flow) / previous - 1)
+    return returns
+
+
+def compound_returns(returns: list[float]) -> float:
+    value = 1.0
+    for item in returns:
+        value *= 1 + item
+    return value
 
 
 def ratio_metric(returns: list[float], downside_only: bool) -> float | None:
@@ -549,16 +574,17 @@ def longest_drawdown(curve: list[EquityPoint]) -> int:
 
 
 def calculate_yearly_returns(curve: list[EquityPoint]) -> list[YearlyReturn]:
-    by_year: dict[int, list[EquityPoint]] = defaultdict(list)
-    for point in curve:
-        by_year[int(point.date[:4])].append(point)
+    by_year: dict[int, list[float]] = defaultdict(list)
+    returns = adjusted_returns(curve)
+    for index, item in enumerate(returns, start=1):
+        by_year[int(curve[index].date[:4])].append(item)
     return [
         YearlyReturn(
             year=year,
-            return_pct=round((points[-1].equity / points[0].equity - 1) * 100, 2),
+            return_pct=round((compound_returns(items) - 1) * 100, 2),
         )
-        for year, points in sorted(by_year.items())
-        if len(points) >= 2
+        for year, items in sorted(by_year.items())
+        if items
     ]
 
 
@@ -566,15 +592,16 @@ def calculate_regime_performance(
     frames: list[BacktestFrame],
     curve: list[EquityPoint],
 ) -> list[RegimePerformance]:
-    buckets: dict[str, list[tuple[BacktestFrame, EquityPoint, float]]] = {
+    buckets: dict[str, list[tuple[BacktestFrame, float]]] = {
         "uptrend": [],
         "downtrend": [],
         "shock": [],
     }
+    returns = adjusted_returns(curve)
     for index, point in enumerate(curve):
         frame = frames[index + 1]
         prev_frame = frames[index]
-        equity_return = 0.0 if index == 0 else point.equity / curve[index - 1].equity - 1
+        equity_return = returns[index - 1] if index > 0 and index - 1 < len(returns) else 0.0
         qqq_return = frame.qqq / prev_frame.qqq - 1
         regime = (
             "shock"
@@ -583,7 +610,7 @@ def calculate_regime_performance(
             if frame.qqq >= frame.sma200
             else "downtrend"
         )
-        buckets[regime].append((frame, point, equity_return))
+        buckets[regime].append((frame, equity_return))
 
     labels = {
         "uptrend": "QQQ 장기선 위",
@@ -604,17 +631,22 @@ def calculate_regime_performance(
                 )
             )
             continue
-        start_equity = rows[0][1].equity
-        end_equity = rows[-1][1].equity
-        returns = [row[2] for row in rows]
+        regime_returns = [row[1] for row in rows]
+        equity_index = 1.0
+        peak = 1.0
+        max_drawdown = 0.0
+        for item in regime_returns:
+            equity_index *= 1 + item
+            peak = max(peak, equity_index)
+            max_drawdown = min(max_drawdown, equity_index / peak - 1)
         output.append(
             RegimePerformance(
                 regime=regime,  # type: ignore[arg-type]
                 label=labels[regime],
                 days=len(rows),
-                return_pct=round((end_equity / start_equity - 1) * 100, 2),
-                win_rate=round(sum(1 for item in returns if item > 0) / len(returns) * 100, 2),
-                max_drawdown=round(min(row[1].drawdown for row in rows), 2),
+                return_pct=round((compound_returns(regime_returns) - 1) * 100, 2),
+                win_rate=round(sum(1 for item in regime_returns if item > 0) / len(regime_returns) * 100, 2),
+                max_drawdown=round(max_drawdown * 100, 2),
             )
         )
     return output
@@ -624,7 +656,7 @@ def build_projection(
     request: BacktestRunRequest,
     curve: list[EquityPoint],
 ) -> list[ProjectionScenario]:
-    returns = [curve[index].equity / curve[index - 1].equity - 1 for index in range(1, len(curve))]
+    returns = adjusted_returns(curve)
     if not returns:
         annualized_mean = 0
         annualized_volatility = 0

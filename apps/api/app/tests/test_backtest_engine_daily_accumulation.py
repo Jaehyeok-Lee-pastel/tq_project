@@ -1,5 +1,5 @@
 from app.schemas.backtest import BacktestRunRequest
-from app.services.backtest_engine import BacktestFrame, simulate_buy_hold, simulate_strategy
+from app.services.backtest_engine import BacktestFrame, calculate_metrics, calculate_regime_performance, simulate_buy_hold, simulate_strategy
 
 
 def frame(day: int, qqq: float, tqqq: float, sma200: float = 100) -> BacktestFrame:
@@ -147,3 +147,26 @@ def test_staged_200ma_receives_monthly_contributions_under_current_stage_rules()
 
     assert with_contribution[-1].equity > without_contribution[-1].equity
     assert any(trade.symbol == "TQQQ" for trade in trades)
+
+
+def test_monthly_contributions_do_not_inflate_cagr_when_prices_are_flat():
+    frames = [
+        frame(1, 100, 100),
+        frame(2, 100, 100),
+        frame(3, 100, 100),
+        frame(4, 100, 100),
+    ]
+
+    curve, trades = simulate_buy_hold(
+        frames,
+        1_000_000,
+        "QQQ",
+        monthly_contribution=1_000_000,
+        cost_ratio=0,
+    )
+    metrics = calculate_metrics(curve, trades)
+    regimes = calculate_regime_performance(frames, curve)
+
+    assert metrics.cagr == 0
+    assert metrics.total_return == 0
+    assert all(item.return_pct == 0 for item in regimes)

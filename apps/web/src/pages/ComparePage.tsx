@@ -488,7 +488,8 @@ function MultiStrategyChart({ backtests, selected }: { backtests: BacktestResult
 }
 
 function BacktestDetail({ result }: { result: BacktestResult }) {
-  const recentTrades = result.trades.slice(-14).reverse();
+  const [showAllTrades, setShowAllTrades] = useState(false);
+  const displayedTrades = showAllTrades ? result.trades : result.trades.slice(-14).reverse();
   const firstTrade = result.trades[0];
   const lastTrade = result.trades[result.trades.length - 1];
 
@@ -545,10 +546,20 @@ function BacktestDetail({ result }: { result: BacktestResult }) {
       </div>
 
       <div className="detail-summary-card span-detail">
-        <h3>매수/매도 전략 로그</h3>
-        {recentTrades.length ? (
+        <div className="trade-log-head">
+          <div>
+            <h3>매수/매도 전략 로그</h3>
+            <p>{showAllTrades ? "처음 거래부터 전체 로그를 표시합니다." : "최근 거래 14개를 표시합니다."}</p>
+          </div>
+          {result.trades.length > 14 ? (
+            <button type="button" onClick={() => setShowAllTrades((current) => !current)}>
+              {showAllTrades ? "최근 로그만 보기" : "처음부터 전체 로그"}
+            </button>
+          ) : null}
+        </div>
+        {displayedTrades.length ? (
           <div className="trade-log-table">
-            {recentTrades.map((trade, index) => (
+            {displayedTrades.map((trade, index) => (
               <div className={trade.action} key={`${trade.date}-${trade.symbol}-${index}`}>
                 <span>{trade.date}</span>
                 <strong>{trade.symbol} {trade.action === "buy" ? "매수" : "매도"}</strong>

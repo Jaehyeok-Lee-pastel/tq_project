@@ -38,6 +38,7 @@ class EquityPoint(BaseModel):
     equity: float
     drawdown: float
     position: str
+    cash_flow: float = 0
 
 
 class TradeLogItem(BaseModel):
