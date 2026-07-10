@@ -43,3 +43,31 @@ def test_daily_accumulation_200ma_slows_tqqq_buys_when_stretched():
     assert one_x_buys[0].ratio == 30.0
     assert tqqq_buys[-1].ratio == 45.5
     assert "감속" in tqqq_buys[-1].reason
+
+
+def test_daily_accumulation_uses_existing_holdings_as_starting_state():
+    frames = [
+        frame(1, 105, 100),
+        frame(2, 106, 102),
+        frame(3, 107, 104),
+    ]
+
+    curve, trades = simulate_strategy(
+        frames,
+        BacktestRunRequest(
+            strategy="tqqq_daily_200ma",
+            initial_capital=2_500_000,
+            initial_tqqq_value=1_600_000,
+            initial_one_x_value=500_000,
+            initial_cash_value=400_000,
+            monthly_contribution=1_000_000,
+            daily_base_tqqq_ratio=70,
+            daily_base_one_x_ratio=30,
+            one_x_symbol="QQQM",
+            cash_yield=4.5,
+        ),
+    )
+
+    assert curve[0].equity > 2_500_000
+    assert any(trade.symbol == "TQQQ" and trade.ratio == 70.0 for trade in trades)
+    assert any(trade.symbol == "QQQM" and trade.ratio == 30.0 for trade in trades)

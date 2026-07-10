@@ -31,6 +31,9 @@ async def compare_strategies(request: StrategyCompareRequest) -> StrategyCompare
                     monthly_contribution=request.monthly_contribution,
                     daily_base_tqqq_ratio=request.daily_base_tqqq_ratio,
                     daily_base_one_x_ratio=request.daily_base_one_x_ratio,
+                    initial_tqqq_value=request.initial_tqqq_value,
+                    initial_one_x_value=request.initial_one_x_value,
+                    initial_cash_value=request.initial_cash_value,
                 )
             )
         )
@@ -80,6 +83,9 @@ async def build_sensitivity(
                 monthly_contribution=request.monthly_contribution,
                 daily_base_tqqq_ratio=request.daily_base_tqqq_ratio,
                 daily_base_one_x_ratio=request.daily_base_one_x_ratio,
+                initial_tqqq_value=request.initial_tqqq_value,
+                initial_one_x_value=request.initial_one_x_value,
+                initial_cash_value=request.initial_cash_value,
             )
         )
         item = score_backtest(backtest, request.risk_score)

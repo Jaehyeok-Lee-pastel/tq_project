@@ -152,6 +152,9 @@ def simulate_strategy(
             base_tqqq_ratio=request.daily_base_tqqq_ratio / 100,
             base_one_x_ratio=request.daily_base_one_x_ratio / 100,
             one_x_symbol=request.one_x_symbol,
+            initial_tqqq_value=request.initial_tqqq_value,
+            initial_one_x_value=request.initial_one_x_value,
+            initial_cash_value=request.initial_cash_value,
             daily_cash_return=((1 + request.cash_yield / 100) ** (1 / 252) - 1),
             cost_ratio=(request.fee_bps + request.slippage_bps) / 10_000,
             moving_average_days=request.moving_average_days,
@@ -186,20 +189,27 @@ def simulate_daily_accumulation_200ma_strategy(
     base_tqqq_ratio: float,
     base_one_x_ratio: float,
     one_x_symbol: str,
+    initial_tqqq_value: float,
+    initial_one_x_value: float,
+    initial_cash_value: float,
     daily_cash_return: float,
     cost_ratio: float,
     moving_average_days: int,
 ) -> tuple[list[EquityPoint], list[TradeLogItem]]:
-    cash = initial_capital
-    tqqq_value = 0.0
-    one_x_value = 0.0
-    peak = initial_capital
+    has_initial_holdings = any(
+        value > 0 for value in (initial_tqqq_value, initial_one_x_value, initial_cash_value)
+    )
+    cash = initial_cash_value if has_initial_holdings else initial_capital
+    tqqq_value = initial_tqqq_value if has_initial_holdings else 0.0
+    one_x_value = initial_one_x_value if has_initial_holdings else 0.0
+    starting_equity = cash + tqqq_value + one_x_value
+    peak = starting_equity
     curve: list[EquityPoint] = []
     trades: list[TradeLogItem] = []
     below_ma_days = 0
     daily_contribution = monthly_contribution / 21 if monthly_contribution > 0 else 0
-    initial_daily_deploy = initial_capital / 21
-    initial_deploy_days_left = 21
+    initial_daily_deploy = 0 if has_initial_holdings else initial_capital / 21
+    initial_deploy_days_left = 0 if has_initial_holdings else 21
 
     for index in range(1, len(frames)):
         prev = frames[index - 1]
@@ -232,7 +242,8 @@ def simulate_daily_accumulation_200ma_strategy(
             one_x_buy_ratio = min(base_one_x_ratio, max(0.0, 1 - tqqq_buy_ratio))
             total_buy_ratio = min(tqqq_buy_ratio + one_x_buy_ratio, 1.0)
             initial_deploy = initial_daily_deploy if initial_deploy_days_left > 0 else 0
-            buy_budget = min(cash, daily_contribution + initial_deploy if daily_contribution > 0 else cash * 0.02)
+            scheduled_buy_budget = daily_contribution + initial_deploy
+            buy_budget = min(cash, scheduled_buy_budget)
 
             if buy_budget > 0 and total_buy_ratio > 0:
                 tqqq_buy = buy_budget * tqqq_buy_ratio
