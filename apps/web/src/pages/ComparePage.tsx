@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { BarChart3, Bot, FlaskConical, Medal, RefreshCw, ShieldCheck, Trophy } from "lucide-react";
+import { useMemo, useState } from "react";
+import { BarChart3, Bot, FlaskConical, LineChart, Medal, RefreshCw, ShieldCheck, Trophy } from "lucide-react";
 
 type BacktestStrategy = "qqq_buy_hold" | "tqqq_buy_hold" | "tqqq_200ma" | "qld_200ma" | "tqqq_daily_200ma";
 type Verdict = "best_fit" | "high_return" | "defensive" | "too_risky" | "watch";
@@ -23,12 +23,46 @@ type StrategyRankItem = {
   reason: string;
 };
 
+type EquityPoint = { date: string; equity: number; drawdown: number; position: string };
+type TradeLogItem = { date: string; action: "buy" | "sell"; symbol: string; ratio: number; reason: string };
+type YearlyReturn = { year: number; return_pct: number };
+type RegimePerformance = { regime: "uptrend" | "downtrend" | "shock"; label: string; days: number; return_pct: number; win_rate: number; max_drawdown: number };
+type BacktestMetrics = {
+  final_capital: number;
+  total_return: number;
+  cagr: number;
+  max_drawdown: number;
+  sharpe?: number | null;
+  sortino?: number | null;
+  calmar?: number | null;
+  win_rate: number;
+  trade_count: number;
+  best_year?: number | null;
+  worst_year?: number | null;
+  longest_drawdown_days: number;
+};
+type BacktestResult = {
+  strategy: BacktestStrategy;
+  strategy_name: string;
+  period_start: string;
+  period_end: string;
+  equity_curve: EquityPoint[];
+  benchmark_curve: EquityPoint[];
+  metrics: BacktestMetrics;
+  benchmark_metrics: BacktestMetrics;
+  yearly_returns: YearlyReturn[];
+  regime_performance: RegimePerformance[];
+  trades: TradeLogItem[];
+  interpretation: string[];
+};
+
 type StrategyCompareResponse = {
   initial_capital: number;
   risk_score: number;
   recommended_strategy: BacktestStrategy;
   summary: string;
   rankings: StrategyRankItem[];
+  backtests: BacktestResult[];
   sensitivity?: {
     best_window: number;
     robustness_score: number;
@@ -67,6 +101,7 @@ type CompareConfig = {
 };
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const chartColors = ["#2563eb", "#0f8a63", "#a96700", "#d04444", "#7c3aed"];
 
 const allStrategies: { id: BacktestStrategy; label: string }[] = [
   { id: "tqqq_daily_200ma", label: "보유 기반 일일 적립 감속" },
@@ -87,7 +122,7 @@ const presets: {
     id: "current_daily_7_3",
     title: "현재 보유 + 월 100만원 7:3",
     summary: "TQQQ 160만, QQQM 50만, 현금 40만에서 출발해 월 100만원을 TQQQ 70%, QQQM 30%로 적립합니다.",
-    selected: ["tqqq_daily_200ma", "tqqq_200ma", "qqq_buy_hold"],
+    selected: ["tqqq_daily_200ma", "tqqq_200ma", "qld_200ma", "qqq_buy_hold", "tqqq_buy_hold"],
     config: {
       initial_capital: 2500000,
       initial_tqqq_value: 1600000,
@@ -98,7 +133,7 @@ const presets: {
       daily_base_one_x_ratio: 30,
       one_x_symbol: "QQQM",
       tqqq_target_ratio: 45,
-      qld_target_ratio: 0,
+      qld_target_ratio: 60,
       cash_yield: 4.5,
       risk_score: 78,
     },
@@ -108,24 +143,14 @@ const presets: {
     title: "보수적 적립 6:4",
     summary: "같은 현재 보유 상태에서 월 추가금만 TQQQ 60%, QQQM 40%로 낮춰 비교합니다.",
     selected: ["tqqq_daily_200ma", "tqqq_200ma", "qqq_buy_hold"],
-    config: {
-      daily_base_tqqq_ratio: 60,
-      daily_base_one_x_ratio: 40,
-      monthly_contribution: 1000000,
-      risk_score: 72,
-    },
+    config: { daily_base_tqqq_ratio: 60, daily_base_one_x_ratio: 40, monthly_contribution: 1000000, risk_score: 72 },
   },
   {
     id: "daily_8_2",
     title: "공격적 적립 8:2",
     summary: "상승 추세 참여를 더 키우되 이격도 감속과 200일선 방어는 유지합니다.",
     selected: ["tqqq_daily_200ma", "tqqq_200ma", "tqqq_buy_hold"],
-    config: {
-      daily_base_tqqq_ratio: 80,
-      daily_base_one_x_ratio: 20,
-      monthly_contribution: 1000000,
-      risk_score: 85,
-    },
+    config: { daily_base_tqqq_ratio: 80, daily_base_one_x_ratio: 20, monthly_contribution: 1000000, risk_score: 85 },
   },
 ];
 
@@ -174,6 +199,7 @@ export function ComparePage() {
   const [result, setResult] = useState<StrategyCompareResponse | null>(null);
   const [insight, setInsight] = useState<InsightReport | null>(null);
   const [useAiInsight, setUseAiInsight] = useState(true);
+  const [selectedDetail, setSelectedDetail] = useState<BacktestStrategy>("tqqq_daily_200ma");
   const [config, setConfig] = useState<CompareConfig>({
     initial_capital: 2500000,
     initial_tqqq_value: 1600000,
@@ -181,7 +207,7 @@ export function ComparePage() {
     initial_cash_value: 400000,
     risk_score: 78,
     tqqq_target_ratio: 45,
-    qld_target_ratio: 0,
+    qld_target_ratio: 60,
     one_x_target_ratio: 30,
     one_x_symbol: "QQQM",
     cash_yield: 4.5,
@@ -192,9 +218,13 @@ export function ComparePage() {
     daily_base_tqqq_ratio: 70,
     daily_base_one_x_ratio: 30,
   });
-  const [selected, setSelected] = useState<BacktestStrategy[]>(["tqqq_daily_200ma", "tqqq_200ma", "qqq_buy_hold"]);
+  const [selected, setSelected] = useState<BacktestStrategy[]>(["tqqq_daily_200ma", "tqqq_200ma", "qld_200ma", "qqq_buy_hold", "tqqq_buy_hold"]);
   const winner = result?.rankings[0];
   const currentTotal = config.initial_tqqq_value + config.initial_one_x_value + config.initial_cash_value;
+  const detailBacktest = useMemo(
+    () => result?.backtests.find((item) => item.strategy === selectedDetail) ?? result?.backtests[0],
+    [result, selectedDetail],
+  );
 
   function updateConfig<K extends keyof CompareConfig>(key: K, value: CompareConfig[K]) {
     setConfig((current) => {
@@ -215,6 +245,7 @@ export function ComparePage() {
       return total > 0 ? { ...next, initial_capital: total } : next;
     });
     setSelected(preset.selected);
+    setSelectedDetail(preset.selected[0]);
     setResult(null);
     setInsight(null);
     setStatus(`${preset.title} 조건을 적용했습니다. 비교 실행을 눌러 검증하세요.`);
@@ -230,6 +261,7 @@ export function ComparePage() {
     try {
       const response = await requestCompare({ ...config, strategies: selected });
       setResult(response);
+      setSelectedDetail(response.recommended_strategy);
       setInsight(null);
       setStatus(response.summary);
     } catch (error) {
@@ -308,9 +340,9 @@ export function ComparePage() {
           </div>
           <div className="research-rule-strip">
             <span><ShieldCheck size={15} /> 시작 보유분은 그대로 출발</span>
-            <span>월 추가금만 거래일 단위로 나누어 적립</span>
+            <span>각 전략별 방식으로 월 추가금 반영</span>
             <span>QQQ 200일선 위에서만 TQQQ 신규 적립</span>
-            <span>+10%, +20%, +30% 이격도 구간별 TQQQ 감속</span>
+            <span>상세 결과에서 거래 로그와 경로 확인</span>
           </div>
         </article>
 
@@ -339,6 +371,50 @@ export function ComparePage() {
         ) : null}
 
         {result ? (
+          <article className="panel span-12">
+            <h2 className="panel-title"><Medal size={18} />전략 순위</h2>
+            <div className="ranking-list">
+              {result.rankings.map((item) => (
+                <button className={`ranking-row ${item.verdict}`} key={item.strategy} onClick={() => setSelectedDetail(item.strategy)}>
+                  <div className="rank-badge">{item.rank}</div>
+                  <div><strong>{item.strategy_name}</strong><small>{item.reason}</small></div>
+                  <Score label="종합" value={item.total_score} />
+                  <Score label="수익" value={item.profit_score} />
+                  <Score label="방어" value={item.defense_score} />
+                  <Score label="적합" value={item.fit_score} />
+                  <div className="rank-metrics">
+                    <span>{formatKrw(item.final_capital)}</span>
+                    <span>CAGR {formatPct(item.cagr)}</span>
+                    <span>MDD {formatPct(item.max_drawdown)}</span>
+                    <span>{verdictLabel(item.verdict)}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </article>
+        ) : null}
+
+        {result ? (
+          <article className="panel span-12">
+            <div className="report-head">
+              <div>
+                <h2 className="panel-title"><LineChart size={18} />상세 테스트 결과</h2>
+                <p>전략별 자산곡선, 매수/매도 과정, 연도별 성과를 확인합니다. 순위표 또는 아래 탭을 눌러 전략을 바꿀 수 있습니다.</p>
+              </div>
+            </div>
+            <div className="detail-tabs">
+              {result.backtests.map((backtest) => (
+                <button className={backtest.strategy === detailBacktest?.strategy ? "selected" : ""} key={backtest.strategy} onClick={() => setSelectedDetail(backtest.strategy)}>
+                  {backtest.strategy_name}
+                </button>
+              ))}
+            </div>
+            <MultiStrategyChart backtests={result.backtests} selected={detailBacktest?.strategy} />
+            {detailBacktest ? <BacktestDetail result={detailBacktest} /> : null}
+          </article>
+        ) : null}
+
+        {result ? (
           <article className="panel span-12 insight-card">
             <div className="report-head">
               <h2 className="panel-title"><Bot size={18} />검증 해석 리포트</h2>
@@ -361,47 +437,131 @@ export function ComparePage() {
             ) : <p className="muted">비교 결과를 바탕으로 해석 리포트를 생성할 수 있습니다.</p>}
           </article>
         ) : null}
-
-        {result ? (
-          <article className="panel span-12">
-            <h2 className="panel-title"><Medal size={18} />전략 순위</h2>
-            <div className="ranking-list">
-              {result.rankings.map((item) => (
-                <div className={`ranking-row ${item.verdict}`} key={item.strategy}>
-                  <div className="rank-badge">{item.rank}</div>
-                  <div><strong>{item.strategy_name}</strong><small>{item.reason}</small></div>
-                  <Score label="종합" value={item.total_score} />
-                  <Score label="수익" value={item.profit_score} />
-                  <Score label="방어" value={item.defense_score} />
-                  <Score label="적합" value={item.fit_score} />
-                  <div className="rank-metrics">
-                    <span>{formatKrw(item.final_capital)}</span>
-                    <span>CAGR {formatPct(item.cagr)}</span>
-                    <span>MDD {formatPct(item.max_drawdown)}</span>
-                    <span>{verdictLabel(item.verdict)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </article>
-        ) : null}
-
-        {result?.sensitivity ? (
-          <article className="panel span-12">
-            <h2 className="panel-title"><BarChart3 size={18} />이동평균 민감도</h2>
-            <div className="sensitivity-grid">
-              {result.sensitivity.results.map((item) => (
-                <div className="sensitivity-card" key={item.moving_average_days}>
-                  <span>{item.moving_average_days}일선</span>
-                  <strong>{item.total_score}</strong>
-                  <small>CAGR {formatPct(item.cagr)} / MDD {formatPct(item.max_drawdown)}</small>
-                </div>
-              ))}
-            </div>
-          </article>
-        ) : null}
       </div>
     </section>
+  );
+}
+
+function MultiStrategyChart({ backtests, selected }: { backtests: BacktestResult[]; selected?: BacktestStrategy }) {
+  const allPoints = backtests.flatMap((item) => item.equity_curve);
+  if (!allPoints.length) return null;
+  const min = Math.min(...allPoints.map((point) => point.equity));
+  const max = Math.max(...allPoints.map((point) => point.equity));
+  const range = max - min || 1;
+  const width = 1000;
+  const height = 280;
+
+  function pathFor(points: EquityPoint[]) {
+    if (points.length < 2) return "";
+    return points.map((point, index) => {
+      const x = (index / (points.length - 1)) * width;
+      const y = height - ((point.equity - min) / range) * height;
+      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+  }
+
+  return (
+    <div className="comparison-chart">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="전략별 백테스트 자산 곡선">
+        {backtests.map((item, index) => (
+          <path
+            d={pathFor(item.equity_curve)}
+            key={item.strategy}
+            style={{
+              stroke: chartColors[index % chartColors.length],
+              opacity: !selected || selected === item.strategy ? 1 : 0.28,
+              strokeWidth: selected === item.strategy ? 3.2 : 2,
+            }}
+          />
+        ))}
+      </svg>
+      <div className="chart-legend">
+        {backtests.map((item, index) => (
+          <span className={selected === item.strategy ? "selected" : ""} key={item.strategy}>
+            <em style={{ background: chartColors[index % chartColors.length] }} />
+            {item.strategy_name}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BacktestDetail({ result }: { result: BacktestResult }) {
+  const recentTrades = result.trades.slice(-14).reverse();
+  const firstTrade = result.trades[0];
+  const lastTrade = result.trades[result.trades.length - 1];
+
+  return (
+    <div className="backtest-detail-grid">
+      <div className="detail-summary-card">
+        <span className="section-label">{result.period_start} - {result.period_end}</span>
+        <h3>{result.strategy_name}</h3>
+        <p>{result.interpretation?.[0] ?? "전략 규칙에 따른 백테스트 결과입니다."}</p>
+        <div className="detail-metric-grid">
+          <Score label="최종자산" value={Math.round(result.metrics.final_capital / 10000)} />
+          <Score label="CAGR" value={Math.round(result.metrics.cagr)} />
+          <Score label="MDD" value={Math.round(result.metrics.max_drawdown)} />
+          <Score label="거래" value={result.metrics.trade_count} />
+          <Score label="승률" value={Math.round(result.metrics.win_rate)} />
+          <Score label="최장DD" value={result.metrics.longest_drawdown_days} />
+        </div>
+      </div>
+
+      <div className="detail-summary-card">
+        <span className="section-label">Process</span>
+        <h3>어떤 과정으로 결과가 나왔나</h3>
+        <p>
+          첫 거래는 {firstTrade ? `${firstTrade.date} ${firstTrade.symbol} ${firstTrade.action === "buy" ? "매수" : "매도"}` : "기록 없음"}이고,
+          마지막 거래는 {lastTrade ? `${lastTrade.date} ${lastTrade.symbol} ${lastTrade.action === "buy" ? "매수" : "매도"}` : "기록 없음"}입니다.
+          거래 로그는 최근 기록부터 아래에 표시됩니다.
+        </p>
+        <ListBlock title="해석 메모" items={result.interpretation ?? []} />
+      </div>
+
+      <div className="detail-summary-card span-detail">
+        <h3>연도별 성과</h3>
+        <div className="year-return-grid">
+          {result.yearly_returns.map((item) => (
+            <span className={item.return_pct >= 0 ? "ok" : "danger"} key={item.year}>
+              <small>{item.year}</small>
+              <strong>{formatPct(item.return_pct)}</strong>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="detail-summary-card span-detail">
+        <h3>시장 국면별 성과</h3>
+        <div className="regime-grid">
+          {result.regime_performance.map((item) => (
+            <div className={`regime-card ${item.regime}`} key={item.regime}>
+              <span>{item.label}</span>
+              <strong>{formatPct(item.return_pct)}</strong>
+              <small>{item.days}일 · 승률 {formatPct(item.win_rate)} · MDD {formatPct(item.max_drawdown)}</small>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="detail-summary-card span-detail">
+        <h3>매수/매도 전략 로그</h3>
+        {recentTrades.length ? (
+          <div className="trade-log-table">
+            {recentTrades.map((trade, index) => (
+              <div className={trade.action} key={`${trade.date}-${trade.symbol}-${index}`}>
+                <span>{trade.date}</span>
+                <strong>{trade.symbol} {trade.action === "buy" ? "매수" : "매도"}</strong>
+                <em>{trade.ratio.toFixed(1)}%</em>
+                <small>{trade.reason}</small>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">해당 전략은 기간 중 별도 매수/매도 전환 로그가 없습니다.</p>
+        )}
+      </div>
+    </div>
   );
 }
 
