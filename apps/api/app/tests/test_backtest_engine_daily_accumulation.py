@@ -92,3 +92,58 @@ def test_buy_hold_strategies_receive_monthly_contributions_for_fair_comparison()
     assert with_contribution[-1].equity > without_contribution[-1].equity
     assert trades
     assert all(trade.symbol == "QQQ" for trade in trades)
+
+
+def test_tqqq_buy_hold_receives_monthly_contributions_into_tqqq():
+    frames = [
+        frame(1, 100, 100),
+        frame(2, 101, 103),
+        frame(3, 102, 106),
+    ]
+
+    _, trades = simulate_strategy(
+        frames,
+        BacktestRunRequest(
+            strategy="tqqq_buy_hold",
+            initial_capital=1_000_000,
+            monthly_contribution=1_000_000,
+            cash_yield=4.5,
+        ),
+    )
+
+    assert trades
+    assert all(trade.symbol == "TQQQ" for trade in trades)
+    assert all(trade.ratio == 100 for trade in trades)
+
+
+def test_staged_200ma_receives_monthly_contributions_under_current_stage_rules():
+    frames = [
+        frame(1, 104, 100),
+        frame(2, 105, 102),
+        frame(3, 104, 103),
+        frame(4, 103, 104),
+    ]
+
+    without_contribution, _ = simulate_strategy(
+        frames,
+        BacktestRunRequest(
+            strategy="tqqq_200ma",
+            initial_capital=1_000_000,
+            tqqq_target_ratio=60,
+            monthly_contribution=0,
+            cash_yield=4.5,
+        ),
+    )
+    with_contribution, trades = simulate_strategy(
+        frames,
+        BacktestRunRequest(
+            strategy="tqqq_200ma",
+            initial_capital=1_000_000,
+            tqqq_target_ratio=60,
+            monthly_contribution=1_000_000,
+            cash_yield=4.5,
+        ),
+    )
+
+    assert with_contribution[-1].equity > without_contribution[-1].equity
+    assert any(trade.symbol == "TQQQ" for trade in trades)
