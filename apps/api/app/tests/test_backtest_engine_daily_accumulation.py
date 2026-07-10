@@ -1,5 +1,5 @@
 from app.schemas.backtest import BacktestRunRequest
-from app.services.backtest_engine import BacktestFrame, simulate_strategy
+from app.services.backtest_engine import BacktestFrame, simulate_buy_hold, simulate_strategy
 
 
 def frame(day: int, qqq: float, tqqq: float, sma200: float = 100) -> BacktestFrame:
@@ -71,3 +71,24 @@ def test_daily_accumulation_uses_existing_holdings_as_starting_state():
     assert curve[0].equity > 2_500_000
     assert any(trade.symbol == "TQQQ" and trade.ratio == 70.0 for trade in trades)
     assert any(trade.symbol == "QQQM" and trade.ratio == 30.0 for trade in trades)
+
+
+def test_buy_hold_strategies_receive_monthly_contributions_for_fair_comparison():
+    frames = [
+        frame(1, 100, 100),
+        frame(2, 101, 103),
+        frame(3, 102, 106),
+    ]
+
+    without_contribution, _ = simulate_buy_hold(frames, 1_000_000, "QQQ")
+    with_contribution, trades = simulate_buy_hold(
+        frames,
+        1_000_000,
+        "QQQ",
+        monthly_contribution=1_000_000,
+        cost_ratio=0,
+    )
+
+    assert with_contribution[-1].equity > without_contribution[-1].equity
+    assert trades
+    assert all(trade.symbol == "QQQ" for trade in trades)

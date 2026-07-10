@@ -46,7 +46,13 @@ async def run_backtest(request: BacktestRunRequest) -> BacktestRunResponse:
         raise ValueError("백테스트에는 최소 220거래일 이상의 데이터가 필요합니다.")
 
     result_curve, trades = simulate_strategy(frames, request)
-    benchmark_curve, _ = simulate_buy_hold(frames, request.initial_capital, "QQQ")
+    benchmark_curve, _ = simulate_buy_hold(
+        frames,
+        request.initial_capital,
+        "QQQ",
+        request.monthly_contribution,
+        (request.fee_bps + request.slippage_bps) / 10_000,
+    )
     metrics = calculate_metrics(result_curve, trades)
     benchmark_metrics = calculate_metrics(benchmark_curve, [])
     yearly = calculate_yearly_returns(result_curve)
@@ -142,7 +148,13 @@ def simulate_strategy(
 ) -> tuple[list[EquityPoint], list[TradeLogItem]]:
     if request.strategy in {"qqq_buy_hold", "tqqq_buy_hold"}:
         symbol = "QQQ" if request.strategy == "qqq_buy_hold" else "TQQQ"
-        return simulate_buy_hold(frames, request.initial_capital, symbol)
+        return simulate_buy_hold(
+            frames,
+            request.initial_capital,
+            symbol,
+            request.monthly_contribution,
+            (request.fee_bps + request.slippage_bps) / 10_000,
+        )
 
     if request.strategy == "tqqq_daily_200ma":
         return simulate_daily_accumulation_200ma_strategy(
@@ -179,6 +191,7 @@ def simulate_strategy(
             daily_cash_return=daily_cash_return,
             cost_ratio=cost_ratio,
             moving_average_days=request.moving_average_days,
+            monthly_contribution=request.monthly_contribution,
         )
 
 
@@ -327,6 +340,7 @@ def simulate_staged_200ma_strategy(
     daily_cash_return: float,
     cost_ratio: float,
     moving_average_days: int,
+    monthly_contribution: float = 0,
 ) -> tuple[list[EquityPoint], list[TradeLogItem]]:
     equity = initial_capital
     peak = equity
@@ -335,10 +349,13 @@ def simulate_staged_200ma_strategy(
     trades: list[TradeLogItem] = []
     buy_stage = 0
     staged_ratios = [0.30, 0.65, 1.00]
+    daily_contribution = monthly_contribution / 21 if monthly_contribution > 0 else 0
 
     for index in range(1, len(frames)):
         prev = frames[index - 1]
         current = frames[index]
+        if daily_contribution:
+            equity += daily_contribution
         distance = prev.qqq / prev.sma200 - 1
         desired_ratio = position_ratio
         reason = ""
@@ -434,12 +451,27 @@ def simulate_buy_hold(
     frames: list[BacktestFrame],
     initial_capital: float,
     symbol: str,
+    monthly_contribution: float = 0,
+    cost_ratio: float = 0,
 ) -> tuple[list[EquityPoint], list[TradeLogItem]]:
     equity = initial_capital
     peak = equity
     curve: list[EquityPoint] = []
+    trades: list[TradeLogItem] = []
+    daily_contribution = monthly_contribution / 21 if monthly_contribution > 0 else 0
     for index in range(1, len(frames)):
         equity *= 1 + price_return(frames[index - 1], frames[index], symbol)
+        if daily_contribution:
+            equity += daily_contribution * (1 - cost_ratio)
+            trades.append(
+                TradeLogItem(
+                    date=frames[index].date,
+                    action="buy",
+                    symbol=symbol,
+                    ratio=100,
+                    reason="월 추가금을 거래일 단위로 나누어 장기보유 전략에 적립",
+                )
+            )
         peak = max(peak, equity)
         curve.append(
             EquityPoint(
@@ -449,7 +481,7 @@ def simulate_buy_hold(
                 position=symbol,
             )
         )
-    return curve, []
+    return curve, trades[-120:]
 
 
 def price_return(prev: BacktestFrame, current: BacktestFrame, symbol: str) -> float:
