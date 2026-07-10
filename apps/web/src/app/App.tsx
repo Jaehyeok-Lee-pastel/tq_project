@@ -30,7 +30,7 @@ export function App() {
           </p>
           <h1>TQ Coach</h1>
           <p className="muted">
-            QQQ 200일선 기반 전략 수립, 일일 운용, 테스트와 신뢰도 검증을 분리해서 관리합니다.
+            QQQ 200일선 기반 전략 수립, 오늘의 실행 판단, 개인 연구 백테스트를 분리해서 관리합니다.
           </p>
         </div>
         <nav className="app-nav" aria-label="주요 메뉴">
@@ -44,7 +44,7 @@ export function App() {
           </NavLink>
           <NavLink to="/lab">
             <FlaskConical size={17} />
-            테스트
+            개인연구
           </NavLink>
           <NavLink to="/info">
             <Info size={17} />

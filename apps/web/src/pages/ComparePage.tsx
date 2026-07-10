@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { BarChart3, Bot, FlaskConical, Medal, RefreshCw, ShieldCheck, Trophy } from "lucide-react";
 
-type BacktestStrategy = "qqq_buy_hold" | "tqqq_buy_hold" | "tqqq_200ma" | "qld_200ma";
+type BacktestStrategy = "qqq_buy_hold" | "tqqq_buy_hold" | "tqqq_200ma" | "qld_200ma" | "tqqq_daily_200ma";
 type Verdict = "best_fit" | "high_return" | "defensive" | "too_risky" | "watch";
+
 type StrategyRankItem = {
   rank: number;
   strategy: BacktestStrategy;
@@ -21,6 +22,8 @@ type StrategyRankItem = {
   verdict: Verdict;
   reason: string;
 };
+
+type Projection = { name: "bear" | "base" | "bull"; ending_capital: number; annual_return: number; profit: number; note: string };
 type StrategyCompareResponse = {
   initial_capital: number;
   risk_score: number;
@@ -30,8 +33,6 @@ type StrategyCompareResponse = {
   tqqq_default_comparison?: {
     baseline_label: string;
     custom_label: string;
-    baseline_target_ratio: number;
-    custom_target_ratio: number;
     final_capital_delta: number;
     cagr_delta: number;
     max_drawdown_delta: number;
@@ -46,30 +47,17 @@ type StrategyCompareResponse = {
       items: { label: string; score: number; status: "ok" | "watch" | "danger"; detail: string }[];
       to_reach_100: string[];
     };
-    baseline: {
-      metrics: { final_capital: number; cagr: number; max_drawdown: number; trade_count: number };
-      projection: { name: "bear" | "base" | "bull"; ending_capital: number; annual_return: number; profit: number; note: string }[];
-    };
-    custom: {
-      metrics: { final_capital: number; cagr: number; max_drawdown: number; trade_count: number };
-      projection: { name: "bear" | "base" | "bull"; ending_capital: number; annual_return: number; profit: number; note: string }[];
-    };
+    baseline: { metrics: { final_capital: number; cagr: number; max_drawdown: number; trade_count: number }; projection: Projection[] };
+    custom: { metrics: { final_capital: number; cagr: number; max_drawdown: number; trade_count: number }; projection: Projection[] };
   } | null;
   sensitivity?: {
-    tested_windows: number[];
     best_window: number;
     robustness_score: number;
     verdict: string;
-    results: {
-      strategy: BacktestStrategy;
-      strategy_name: string;
-      moving_average_days: number;
-      cagr: number;
-      max_drawdown: number;
-      total_score: number;
-    }[];
+    results: { strategy: BacktestStrategy; strategy_name: string; moving_average_days: number; cagr: number; max_drawdown: number; total_score: number }[];
   } | null;
 };
+
 type InsightReport = {
   headline: string;
   confidence_level: "low" | "medium" | "high";
@@ -80,43 +68,81 @@ type InsightReport = {
   ai_used: boolean;
 };
 
+type CompareConfig = {
+  initial_capital: number;
+  risk_score: number;
+  tqqq_target_ratio: number;
+  qld_target_ratio: number;
+  one_x_target_ratio: number;
+  one_x_symbol: string;
+  cash_yield: number;
+  moving_average_days: number;
+  include_default_tqqq_comparison: boolean;
+  default_tqqq_target_ratio: number;
+  monthly_contribution: number;
+  daily_base_tqqq_ratio: number;
+  daily_base_one_x_ratio: number;
+};
+
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+
 const allStrategies: { id: BacktestStrategy; label: string }[] = [
-  { id: "tqqq_200ma", label: "QQQ 200일선 기반 TQQQ" },
-  { id: "qld_200ma", label: "QQQ 200일선 기반 QLD" },
+  { id: "tqqq_daily_200ma", label: "TQQQ 일일 적립 감속" },
+  { id: "tqqq_200ma", label: "TQQQ 200일선 분할" },
+  { id: "qld_200ma", label: "QLD 200일선" },
   { id: "qqq_buy_hold", label: "QQQ 장기 보유" },
   { id: "tqqq_buy_hold", label: "TQQQ 장기 보유" },
 ];
-const researchPresets = [
+
+const researchPresets: {
+  id: string;
+  title: string;
+  summary: string;
+  selected: BacktestStrategy[];
+  config: Partial<CompareConfig>;
+}[] = [
   {
-    id: "default_vs_custom",
-    title: "기본형 vs 커스텀형",
-    summary: "기본 TQQQ 200일선 60%와 현재 리스크 맞춤 커스텀 비중을 같은 원금으로 직접 비교합니다.",
-    selected: ["tqqq_200ma", "qqq_buy_hold"] as BacktestStrategy[],
-    config: { risk_score: 75, tqqq_target_ratio: 45, qld_target_ratio: 0, moving_average_days: 200, cash_yield: 4.5 },
+    id: "daily_accumulation_7_3",
+    title: "월 100만원 · 7:3 일일 적립",
+    summary: "QQQ가 200일선 위에 있을 때 TQQQ 70%, QQQM 30%로 매일 적립하고 과열될수록 TQQQ 비중만 감속합니다.",
+    selected: ["tqqq_daily_200ma", "tqqq_200ma", "qqq_buy_hold"],
+    config: {
+      risk_score: 78,
+      tqqq_target_ratio: 45,
+      qld_target_ratio: 0,
+      one_x_target_ratio: 30,
+      one_x_symbol: "QQQM",
+      moving_average_days: 200,
+      cash_yield: 4.5,
+      monthly_contribution: 1000000,
+      daily_base_tqqq_ratio: 70,
+      daily_base_one_x_ratio: 30,
+    },
   },
   {
-    id: "tqqq_core",
-    title: "TQQQ 200일선 공격형",
-    summary: "TQQQ를 핵심 엔진으로 쓰되 목표 비중을 45%로 제한하고 SGOV/현금 대기를 전제로 봅니다.",
-    selected: ["tqqq_200ma", "qqq_buy_hold"] as BacktestStrategy[],
-    config: { risk_score: 78, tqqq_target_ratio: 45, qld_target_ratio: 0, moving_average_days: 200, cash_yield: 4.5 },
+    id: "basic_vs_custom",
+    title: "기본형 vs 커스텀형",
+    summary: "기본 TQQQ 200일선 전략과 리스크 맞춤 커스텀 전략을 같은 조건에서 비교합니다.",
+    selected: ["tqqq_200ma", "qqq_buy_hold"],
+    config: { risk_score: 75, tqqq_target_ratio: 45, qld_target_ratio: 0, monthly_contribution: 0, cash_yield: 4.5 },
   },
   {
     id: "qld_buffer",
     title: "QLD 완충형",
-    summary: "TQQQ 변동성이 부담될 때 QLD 2배 레버리지로 대체해 지속 가능성을 비교합니다.",
-    selected: ["qld_200ma", "qqq_buy_hold"] as BacktestStrategy[],
-    config: { risk_score: 65, tqqq_target_ratio: 0, qld_target_ratio: 60, moving_average_days: 200, cash_yield: 4.5 },
+    summary: "TQQQ 변동성이 부담될 때 QLD 2배 전략과 QQQ 장기 보유를 비교합니다.",
+    selected: ["qld_200ma", "qqq_buy_hold"],
+    config: { risk_score: 65, tqqq_target_ratio: 0, qld_target_ratio: 60, monthly_contribution: 0, cash_yield: 4.5 },
   },
 ];
 
 function formatKrw(value: number) {
   return `${Math.round(value).toLocaleString("ko-KR")}원`;
 }
+
 function formatPct(value: number) {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
+
 function verdictLabel(verdict: Verdict) {
   return {
     best_fit: "최적 후보",
@@ -127,17 +153,7 @@ function verdictLabel(verdict: Verdict) {
   }[verdict];
 }
 
-async function requestCompare(payload: {
-  initial_capital: number;
-  risk_score: number;
-  strategies: BacktestStrategy[];
-  tqqq_target_ratio: number;
-  qld_target_ratio: number;
-  cash_yield: number;
-  moving_average_days: number;
-  include_default_tqqq_comparison?: boolean;
-  default_tqqq_target_ratio?: number;
-}) {
+async function requestCompare(payload: CompareConfig & { strategies: BacktestStrategy[] }) {
   const response = await fetch(`${apiBaseUrl}/compare/strategies`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -158,30 +174,40 @@ async function requestInsight(payload: StrategyCompareResponse, useAi: boolean) 
 }
 
 export function ComparePage() {
-  const [status, setStatus] = useState("같은 원금으로 여러 전략을 동시에 비교합니다.");
+  const [status, setStatus] = useState("개인 연구 전략을 같은 조건으로 비교합니다.");
   const [loading, setLoading] = useState(false);
   const [loadingInsight, setLoadingInsight] = useState(false);
   const [result, setResult] = useState<StrategyCompareResponse | null>(null);
   const [insight, setInsight] = useState<InsightReport | null>(null);
   const [useAiInsight, setUseAiInsight] = useState(true);
-  const [config, setConfig] = useState({
+  const [config, setConfig] = useState<CompareConfig>({
     initial_capital: 2500000,
-    risk_score: 75,
-    tqqq_target_ratio: 60,
-    qld_target_ratio: 70,
-    cash_yield: 3,
+    risk_score: 78,
+    tqqq_target_ratio: 45,
+    qld_target_ratio: 0,
+    one_x_target_ratio: 30,
+    one_x_symbol: "QQQM",
+    cash_yield: 4.5,
     moving_average_days: 200,
     include_default_tqqq_comparison: true,
     default_tqqq_target_ratio: 60,
+    monthly_contribution: 1000000,
+    daily_base_tqqq_ratio: 70,
+    daily_base_one_x_ratio: 30,
   });
-  const [selected, setSelected] = useState<BacktestStrategy[]>(allStrategies.map((item) => item.id));
+  const [selected, setSelected] = useState<BacktestStrategy[]>(["tqqq_daily_200ma", "tqqq_200ma", "qqq_buy_hold"]);
+  const winner = result?.rankings[0];
 
   function toggleStrategy(strategy: BacktestStrategy) {
-    setSelected((current) =>
-      current.includes(strategy)
-        ? current.filter((item) => item !== strategy)
-        : [...current, strategy],
-    );
+    setSelected((current) => (current.includes(strategy) ? current.filter((item) => item !== strategy) : [...current, strategy]));
+  }
+
+  function applyPreset(preset: (typeof researchPresets)[number]) {
+    setConfig((current) => ({ ...current, ...preset.config }));
+    setSelected(preset.selected);
+    setResult(null);
+    setInsight(null);
+    setStatus(`${preset.title} 조건을 적용했습니다. 비교 실행을 눌러 검증하세요.`);
   }
 
   async function runCompare() {
@@ -190,7 +216,7 @@ export function ComparePage() {
       return;
     }
     setLoading(true);
-    setStatus("동일 원금 기준 전략 랭킹을 계산하는 중입니다...");
+    setStatus("같은 조건으로 전략 성과를 계산하는 중입니다...");
     try {
       const response = await requestCompare({ ...config, strategies: selected });
       setResult(response);
@@ -201,14 +227,6 @@ export function ComparePage() {
     } finally {
       setLoading(false);
     }
-  }
-
-  function applyPreset(preset: (typeof researchPresets)[number]) {
-    setConfig((current) => ({ ...current, ...preset.config }));
-    setSelected(preset.selected);
-    setResult(null);
-    setInsight(null);
-    setStatus(`${preset.title} 조건을 적용했습니다. 전략 비교 실행을 눌러 같은 원금 기준으로 검증하세요.`);
   }
 
   async function runInsight() {
@@ -226,14 +244,12 @@ export function ComparePage() {
     }
   }
 
-  const winner = result?.rankings[0];
-
   return (
     <section className="page-grid">
       <div className="hero-panel compare">
         <div>
-          <span className="section-label">Strategy Lab</span>
-          <h2>QQQ/QLD/TQQQ 전략을 같은 원금으로 연구합니다.</h2>
+          <span className="section-label">Personal Research</span>
+          <h2>월 적립·이격도 감속 전략을 백테스트합니다</h2>
           <p>{status}</p>
         </div>
         <button className="primary" onClick={runCompare} disabled={loading}>
@@ -247,9 +263,9 @@ export function ComparePage() {
           <div className="report-head">
             <h2 className="panel-title">
               <FlaskConical size={18} />
-              실험 프리셋
+              연구 프리셋
             </h2>
-            <p>프리셋은 입력값을 바꾸는 도구입니다. 실제 판단은 아래 백테스트 결과와 민감도 검증으로 확인합니다.</p>
+            <p>실전 전략으로 승격하기 전, 개인 연구 가설을 기존 TQQQ 200일선 전략과 비교합니다.</p>
           </div>
           <div className="research-preset-grid">
             {researchPresets.map((preset) => (
@@ -267,106 +283,46 @@ export function ComparePage() {
             연구 조건
           </h2>
           <div className="backtest-controls">
-            <label>동일 원금<input type="number" value={config.initial_capital} onChange={(event) => setConfig({ ...config, initial_capital: Number(event.target.value) })} /></label>
+            <label>초기 원금<input type="number" value={config.initial_capital} onChange={(event) => setConfig({ ...config, initial_capital: Number(event.target.value) })} /></label>
+            <label>월 추가금<input type="number" value={config.monthly_contribution} onChange={(event) => setConfig({ ...config, monthly_contribution: Number(event.target.value) })} /></label>
             <label>리스크 점수<input type="number" min={0} max={100} value={config.risk_score} onChange={(event) => setConfig({ ...config, risk_score: Number(event.target.value) })} /></label>
-            <label>TQQQ 목표 비중<input type="number" value={config.tqqq_target_ratio} onChange={(event) => setConfig({ ...config, tqqq_target_ratio: Number(event.target.value) })} /></label>
-            <label>기본형 TQQQ 비중<input type="number" value={config.default_tqqq_target_ratio} onChange={(event) => setConfig({ ...config, default_tqqq_target_ratio: Number(event.target.value) })} /></label>
-            <label>QLD 목표 비중<input type="number" value={config.qld_target_ratio} onChange={(event) => setConfig({ ...config, qld_target_ratio: Number(event.target.value) })} /></label>
-            <label>현금 수익률<input type="number" value={config.cash_yield} onChange={(event) => setConfig({ ...config, cash_yield: Number(event.target.value) })} /></label>
+            <label>일일 TQQQ 기준비중<input type="number" value={config.daily_base_tqqq_ratio} onChange={(event) => setConfig({ ...config, daily_base_tqqq_ratio: Number(event.target.value) })} /></label>
+            <label>일일 1x 기준비중<input type="number" value={config.daily_base_one_x_ratio} onChange={(event) => setConfig({ ...config, daily_base_one_x_ratio: Number(event.target.value) })} /></label>
+            <label>1x 자산<select value={config.one_x_symbol} onChange={(event) => setConfig({ ...config, one_x_symbol: event.target.value })}><option value="QQQM">QQQM</option><option value="QQQ">QQQ</option><option value="SPYM">SPYM</option></select></label>
+            <label>TQQQ 분할 목표<input type="number" value={config.tqqq_target_ratio} onChange={(event) => setConfig({ ...config, tqqq_target_ratio: Number(event.target.value) })} /></label>
+            <label>QLD 목표<input type="number" value={config.qld_target_ratio} onChange={(event) => setConfig({ ...config, qld_target_ratio: Number(event.target.value) })} /></label>
+            <label>현금/SGOV 기대수익<input type="number" value={config.cash_yield} onChange={(event) => setConfig({ ...config, cash_yield: Number(event.target.value) })} /></label>
             <label>기준 이동평균<input type="number" min={50} max={300} value={config.moving_average_days} onChange={(event) => setConfig({ ...config, moving_average_days: Number(event.target.value) })} /></label>
-            <label>기본 비교<select value={config.include_default_tqqq_comparison ? "on" : "off"} onChange={(event) => setConfig({ ...config, include_default_tqqq_comparison: event.target.value === "on" })}><option value="on">사용</option><option value="off">끄기</option></select></label>
           </div>
           <div className="strategy-toggle-list">
             {allStrategies.map((strategy) => (
-              <button
-                className={selected.includes(strategy.id) ? "selected" : ""}
-                key={strategy.id}
-                onClick={() => toggleStrategy(strategy.id)}
-              >
+              <button className={selected.includes(strategy.id) ? "selected" : ""} key={strategy.id} onClick={() => toggleStrategy(strategy.id)}>
                 {strategy.label}
               </button>
             ))}
           </div>
           <div className="research-rule-strip">
-            <span>
-              <ShieldCheck size={15} />
-              QQQ 기준 200일선을 기본 신호로 사용
-            </span>
-            <span>TQQQ와 QLD는 보통 동시 핵심 보유보다 대체 비교</span>
-            <span>SGOV/현금 수익률은 대기자산 가정으로 반영</span>
-            <span>분할비율·이격도 규칙 백테스트 확장은 다음 단계</span>
+            <span><ShieldCheck size={15} /> QQQ 200일선 위에서만 TQQQ 신규 적립</span>
+            <span>+10%, +20%, +30% 이격도 구간마다 TQQQ 일일 매수 감속</span>
+            <span>200일선 아래 2거래일이면 TQQQ 방어 전환</span>
+            <span>월 추가금은 거래일 단위로 나누어 반영</span>
           </div>
         </article>
-
-        {result?.tqqq_default_comparison ? (
-          <article className="panel span-12 winner-card subtle">
-            <div>
-              <span className="section-label">Default vs Custom</span>
-              <h2>
-                <ShieldCheck size={22} />
-                기본 TQQQ 200일선과 커스텀 전략 비교
-              </h2>
-              <p>{result.tqqq_default_comparison.summary}</p>
-              <div className="research-rule-strip">
-                <span>{result.tqqq_default_comparison.baseline_label}</span>
-                <span>{result.tqqq_default_comparison.custom_label}</span>
-                <span>현재 리스크 {result.risk_score}점 기준</span>
-              </div>
-            </div>
-            <div className="confidence-breakdown-grid">
-              <Score label="최종자산 차이" value={Math.round(result.tqqq_default_comparison.final_capital_delta / 10000)} />
-              <Score label="CAGR 차이" value={Math.round(result.tqqq_default_comparison.cagr_delta)} />
-              <Score label="MDD 차이" value={Math.round(result.tqqq_default_comparison.max_drawdown_delta)} />
-              <Score label="기준 예상차" value={Math.round(result.tqqq_default_comparison.base_projection_delta / 10000)} />
-            </div>
-            <div className={`insight-report ${result.tqqq_default_comparison.philosophy_audit.verdict === "excellent" || result.tqqq_default_comparison.philosophy_audit.verdict === "good" ? "high" : result.tqqq_default_comparison.philosophy_audit.verdict === "watch" ? "medium" : "low"}`}>
-              <span>TQQQ 200 철학 정렬도 / {result.tqqq_default_comparison.philosophy_audit.score}점</span>
-              <h3>{result.tqqq_default_comparison.philosophy_audit.summary}</h3>
-              <div className="confidence-breakdown-grid">
-                {result.tqqq_default_comparison.philosophy_audit.items.map((item) => (
-                  <Score key={item.label} label={item.label} value={item.score} />
-                ))}
-              </div>
-              <ListBlock title="100점에 가까워지는 방법" items={result.tqqq_default_comparison.philosophy_audit.to_reach_100} />
-            </div>
-            <div className="ranking-list compact">
-              <ComparisonRow
-                label={result.tqqq_default_comparison.baseline_label}
-                metrics={result.tqqq_default_comparison.baseline.metrics}
-                projection={result.tqqq_default_comparison.baseline.projection}
-              />
-              <ComparisonRow
-                label={result.tqqq_default_comparison.custom_label}
-                metrics={result.tqqq_default_comparison.custom.metrics}
-                projection={result.tqqq_default_comparison.custom.projection}
-              />
-            </div>
-          </article>
-        ) : null}
 
         {winner ? (
           <article className="panel span-12 winner-card">
             <div>
               <span className="section-label">Recommended</span>
-              <h2>
-                <Trophy size={22} />
-                {winner.strategy_name}
-              </h2>
+              <h2><Trophy size={22} />{winner.strategy_name}</h2>
               <p>{winner.reason}</p>
             </div>
-            <div className="winner-score">
-              <strong>{winner.total_score}</strong>
-              <span>종합 점수</span>
-            </div>
+            <div className="winner-score"><strong>{winner.total_score}</strong><span>종합 점수</span></div>
           </article>
         ) : null}
 
         {winner ? (
           <article className="panel span-12">
-            <h2 className="panel-title">
-              <ShieldCheck size={18} />
-              신뢰도 분해
-            </h2>
+            <h2 className="panel-title"><ShieldCheck size={18} />판단 근거</h2>
             <div className="confidence-breakdown-grid">
               <Score label="수익성" value={winner.profit_score} />
               <Score label="방어력" value={winner.defense_score} />
@@ -374,31 +330,16 @@ export function ComparePage() {
               <Score label="일관성" value={winner.consistency_score} />
               <Score label="견고성" value={result?.sensitivity?.robustness_score ?? 0} />
             </div>
-            <div className="confidence-note-grid">
-              <span>수익성은 CAGR과 총수익률을 봅니다.</span>
-              <span>방어력은 최대낙폭을 중심으로 봅니다.</span>
-              <span>성향 적합은 사용자의 리스크 점수와 전략 위험의 거리입니다.</span>
-              <span>견고성은 150/180/200/220/250일선 민감도 차이를 봅니다.</span>
-            </div>
           </article>
         ) : null}
 
         {result ? (
           <article className="panel span-12 insight-card">
             <div className="report-head">
-              <h2 className="panel-title">
-                <Bot size={18} />
-                검증 해석 리포트
-              </h2>
+              <h2 className="panel-title"><Bot size={18} />검증 해석 리포트</h2>
               <div className="hero-actions">
-                <label className="switch">
-                  <input type="checkbox" checked={useAiInsight} onChange={(event) => setUseAiInsight(event.target.checked)} />
-                  AI 해석
-                </label>
-                <button onClick={runInsight} disabled={loadingInsight}>
-                  <Bot size={16} />
-                  {loadingInsight ? "해석 중" : "리포트 생성"}
-                </button>
+                <label className="switch"><input type="checkbox" checked={useAiInsight} onChange={(event) => setUseAiInsight(event.target.checked)} />AI 해석</label>
+                <button onClick={runInsight} disabled={loadingInsight}><Bot size={16} />{loadingInsight ? "해석 중" : "리포트 생성"}</button>
               </div>
             </div>
             {insight ? (
@@ -412,26 +353,18 @@ export function ComparePage() {
                   <ListBlock title="다음 행동" items={insight.recommended_next_steps} />
                 </div>
               </div>
-            ) : (
-              <p className="muted">전략 랭킹과 민감도 결과를 바탕으로 신뢰도 중심 해석을 생성합니다.</p>
-            )}
+            ) : <p className="muted">비교 결과를 바탕으로 해석 리포트를 생성할 수 있습니다.</p>}
           </article>
         ) : null}
 
         {result ? (
           <article className="panel span-12">
-            <h2 className="panel-title">
-              <Medal size={18} />
-              전략 랭킹
-            </h2>
+            <h2 className="panel-title"><Medal size={18} />전략 순위</h2>
             <div className="ranking-list">
               {result.rankings.map((item) => (
                 <div className={`ranking-row ${item.verdict}`} key={item.strategy}>
                   <div className="rank-badge">{item.rank}</div>
-                  <div>
-                    <strong>{item.strategy_name}</strong>
-                    <small>{item.reason}</small>
-                  </div>
+                  <div><strong>{item.strategy_name}</strong><small>{item.reason}</small></div>
                   <Score label="종합" value={item.total_score} />
                   <Score label="수익" value={item.profit_score} />
                   <Score label="방어" value={item.defense_score} />
@@ -450,32 +383,13 @@ export function ComparePage() {
 
         {result?.sensitivity ? (
           <article className="panel span-12">
-            <h2 className="panel-title">
-              <BarChart3 size={18} />
-              이동평균 민감도 검증
-            </h2>
-            <div className="winner-card subtle">
-              <div>
-                <span className="section-label">Robustness</span>
-                <h2>{result.sensitivity.verdict}</h2>
-                <p>
-                  150/180/200/220/250일선을 비교했습니다. 가장 높은 점수는{" "}
-                  {result.sensitivity.best_window}일선에서 나왔습니다.
-                </p>
-              </div>
-              <div className="winner-score">
-                <strong>{result.sensitivity.robustness_score}</strong>
-                <span>견고성</span>
-              </div>
-            </div>
+            <h2 className="panel-title"><BarChart3 size={18} />이동평균 민감도</h2>
             <div className="sensitivity-grid">
               {result.sensitivity.results.map((item) => (
                 <div className="sensitivity-card" key={item.moving_average_days}>
                   <span>{item.moving_average_days}일선</span>
                   <strong>{item.total_score}</strong>
-                  <small>
-                    CAGR {formatPct(item.cagr)} / MDD {formatPct(item.max_drawdown)}
-                  </small>
+                  <small>CAGR {formatPct(item.cagr)} / MDD {formatPct(item.max_drawdown)}</small>
                 </div>
               ))}
             </div>
@@ -494,44 +408,7 @@ function ListBlock({ title, items }: { title: string; items: string[] }) {
   return (
     <div className="list-block">
       <h3>{title}</h3>
-      <ul>
-        {items.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function baseProjection(
-  projection: { name: "bear" | "base" | "bull"; ending_capital: number; annual_return: number; profit: number; note: string }[],
-) {
-  return projection.find((item) => item.name === "base");
-}
-
-function ComparisonRow({
-  label,
-  metrics,
-  projection,
-}: {
-  label: string;
-  metrics: { final_capital: number; cagr: number; max_drawdown: number; trade_count: number };
-  projection: { name: "bear" | "base" | "bull"; ending_capital: number; annual_return: number; profit: number; note: string }[];
-}) {
-  const base = baseProjection(projection);
-  return (
-    <div className="ranking-row watch">
-      <div className="rank-badge">TQ</div>
-      <div>
-        <strong>{label}</strong>
-        <small>최종 {formatKrw(metrics.final_capital)} · 기준 예상 {base ? formatKrw(base.ending_capital) : "-"}</small>
-      </div>
-      <div className="rank-metrics">
-        <span>CAGR {formatPct(metrics.cagr)}</span>
-        <span>MDD {formatPct(metrics.max_drawdown)}</span>
-        <span>거래 {metrics.trade_count}회</span>
-        {base ? <span>미래 기준 {formatPct(base.annual_return)}</span> : null}
-      </div>
+      <ul>{items.map((item) => <li key={item}>{item}</li>)}</ul>
     </div>
   );
 }

@@ -33,6 +33,7 @@ STRATEGY_NAMES = {
     "tqqq_buy_hold": "TQQQ 장기 보유",
     "tqqq_200ma": "QQQ 200일선 기반 TQQQ 전략",
     "qld_200ma": "QQQ 200일선 기반 QLD 전략",
+    "tqqq_daily_200ma": "QQQ 200일선 기반 TQQQ 일일 적립 감속",
 }
 
 
@@ -143,6 +144,19 @@ def simulate_strategy(
         symbol = "QQQ" if request.strategy == "qqq_buy_hold" else "TQQQ"
         return simulate_buy_hold(frames, request.initial_capital, symbol)
 
+    if request.strategy == "tqqq_daily_200ma":
+        return simulate_daily_accumulation_200ma_strategy(
+            frames=frames,
+            initial_capital=request.initial_capital,
+            monthly_contribution=request.monthly_contribution,
+            base_tqqq_ratio=request.daily_base_tqqq_ratio / 100,
+            base_one_x_ratio=request.daily_base_one_x_ratio / 100,
+            one_x_symbol=request.one_x_symbol,
+            daily_cash_return=((1 + request.cash_yield / 100) ** (1 / 252) - 1),
+            cost_ratio=(request.fee_bps + request.slippage_bps) / 10_000,
+            moving_average_days=request.moving_average_days,
+        )
+
     target_symbol = "TQQQ" if request.strategy == "tqqq_200ma" else "QLD"
     target_ratio = (
         request.tqqq_target_ratio
@@ -163,6 +177,133 @@ def simulate_strategy(
             cost_ratio=cost_ratio,
             moving_average_days=request.moving_average_days,
         )
+
+
+def simulate_daily_accumulation_200ma_strategy(
+    frames: list[BacktestFrame],
+    initial_capital: float,
+    monthly_contribution: float,
+    base_tqqq_ratio: float,
+    base_one_x_ratio: float,
+    one_x_symbol: str,
+    daily_cash_return: float,
+    cost_ratio: float,
+    moving_average_days: int,
+) -> tuple[list[EquityPoint], list[TradeLogItem]]:
+    cash = initial_capital
+    tqqq_value = 0.0
+    one_x_value = 0.0
+    peak = initial_capital
+    curve: list[EquityPoint] = []
+    trades: list[TradeLogItem] = []
+    below_ma_days = 0
+    daily_contribution = monthly_contribution / 21 if monthly_contribution > 0 else 0
+    initial_daily_deploy = initial_capital / 21
+    initial_deploy_days_left = 21
+
+    for index in range(1, len(frames)):
+        prev = frames[index - 1]
+        current = frames[index]
+        tqqq_value *= 1 + price_return(prev, current, "TQQQ")
+        one_x_value *= 1 + price_return(prev, current, one_x_symbol)
+        cash *= 1 + daily_cash_return
+        if daily_contribution:
+            cash += daily_contribution
+
+        distance = prev.qqq / prev.sma200 - 1
+        above_ma = prev.qqq > prev.sma200
+        below_ma_days = below_ma_days + 1 if not above_ma else 0
+
+        if below_ma_days >= 2 and tqqq_value > 0:
+            cash += tqqq_value * (1 - cost_ratio)
+            trades.append(
+                TradeLogItem(
+                    date=current.date,
+                    action="sell",
+                    symbol="TQQQ",
+                    ratio=0,
+                    reason=f"QQQ가 {moving_average_days}일선 아래에서 2거래일 이상 마감해 TQQQ 전량 방어 전환",
+                )
+            )
+            tqqq_value = 0.0
+
+        if above_ma and cash > 0:
+            tqqq_buy_ratio = daily_tqqq_buy_ratio(distance, base_tqqq_ratio)
+            one_x_buy_ratio = min(base_one_x_ratio, max(0.0, 1 - tqqq_buy_ratio))
+            total_buy_ratio = min(tqqq_buy_ratio + one_x_buy_ratio, 1.0)
+            initial_deploy = initial_daily_deploy if initial_deploy_days_left > 0 else 0
+            buy_budget = min(cash, daily_contribution + initial_deploy if daily_contribution > 0 else cash * 0.02)
+
+            if buy_budget > 0 and total_buy_ratio > 0:
+                tqqq_buy = buy_budget * tqqq_buy_ratio
+                one_x_buy = buy_budget * one_x_buy_ratio
+                if tqqq_buy > 0:
+                    tqqq_value += tqqq_buy * (1 - cost_ratio)
+                    trades.append(
+                        TradeLogItem(
+                            date=current.date,
+                            action="buy",
+                            symbol="TQQQ",
+                            ratio=round(tqqq_buy_ratio * 100, 1),
+                            reason=daily_accumulation_reason(distance),
+                        )
+                    )
+                if one_x_buy > 0:
+                    one_x_value += one_x_buy * (1 - cost_ratio)
+                    trades.append(
+                        TradeLogItem(
+                            date=current.date,
+                            action="buy",
+                            symbol=one_x_symbol,
+                            ratio=round(one_x_buy_ratio * 100, 1),
+                            reason="TQQQ 과열 감속분을 1x 나스닥/코어 자산으로 적립",
+                        )
+                    )
+                cash -= buy_budget
+                if initial_deploy_days_left > 0:
+                    initial_deploy_days_left -= 1
+
+        total_equity = cash + tqqq_value + one_x_value
+        peak = max(peak, total_equity)
+        position = "CASH"
+        if tqqq_value > 0 and one_x_value > 0:
+            position = f"TQQQ+{one_x_symbol}"
+        elif tqqq_value > 0:
+            position = "TQQQ"
+        elif one_x_value > 0:
+            position = one_x_symbol
+        curve.append(
+            EquityPoint(
+                date=current.date,
+                equity=round(total_equity, 2),
+                drawdown=round((total_equity / peak - 1) * 100, 2),
+                position=position,
+            )
+        )
+    return curve, trades[-120:]
+
+
+def daily_tqqq_buy_ratio(distance: float, base_tqqq_ratio: float) -> float:
+    if distance <= 0:
+        return 0.0
+    if distance < 0.10:
+        return base_tqqq_ratio
+    if distance < 0.20:
+        return base_tqqq_ratio * 0.65
+    if distance < 0.30:
+        return base_tqqq_ratio * 0.30
+    return 0.0
+
+
+def daily_accumulation_reason(distance: float) -> str:
+    pct = distance * 100
+    if distance < 0.10:
+        return f"QQQ 200일선 위 +{pct:.1f}% 구간: 기본 7:3 적립 유지"
+    if distance < 0.20:
+        return f"QQQ 200일선 대비 +{pct:.1f}% 구간: TQQQ 일일 매수 65%로 감속"
+    if distance < 0.30:
+        return f"QQQ 200일선 대비 +{pct:.1f}% 구간: 과열 대응으로 TQQQ 일일 매수 30%로 감속"
+    return f"QQQ 200일선 대비 +{pct:.1f}% 구간: TQQQ 신규 적립 중지"
 
 
 def simulate_staged_200ma_strategy(
@@ -499,6 +640,15 @@ def build_interpretation(
             notes.append(
                 f"저장 전략의 1x 완충 비중 {request.one_x_target_ratio:.1f}%는 200일선 위에서 "
                 f"{request.one_x_symbol} 기준 시장참여 수익으로 반영하고, 200일선 아래에서는 방어자산으로 전환해 계산했습니다."
+            )
+    if request.strategy == "tqqq_daily_200ma":
+        notes.append(
+            "일일 적립 감속 전략은 QQQ가 200일선 위에 있을 때만 적립하고, 이격도가 커질수록 TQQQ 신규 매수 비중을 줄입니다."
+        )
+        if request.monthly_contribution > 0:
+            notes.append(
+                f"월 {request.monthly_contribution:,.0f}원의 추가 투입을 일 단위로 나누어 반영한 현금흐름형 연구 백테스트입니다. "
+                "단순 최종금액은 추가 납입액의 영향을 받으므로 CAGR/MDD와 함께 해석해야 합니다."
             )
     return notes
 

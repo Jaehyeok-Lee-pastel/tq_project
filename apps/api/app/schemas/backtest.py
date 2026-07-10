@@ -7,6 +7,7 @@ BacktestStrategy = Literal[
     "tqqq_buy_hold",
     "tqqq_200ma",
     "qld_200ma",
+    "tqqq_daily_200ma",
 ]
 
 
@@ -24,6 +25,9 @@ class BacktestRunRequest(BaseModel):
     fee_bps: float = Field(default=5, ge=0, le=100)
     slippage_bps: float = Field(default=5, ge=0, le=100)
     projection_years: int = Field(default=3, ge=1, le=10)
+    monthly_contribution: float = Field(default=0, ge=0, le=20_000_000)
+    daily_base_tqqq_ratio: float = Field(default=70, ge=0, le=100)
+    daily_base_one_x_ratio: float = Field(default=30, ge=0, le=100)
 
 
 class EquityPoint(BaseModel):

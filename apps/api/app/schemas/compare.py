@@ -20,12 +20,17 @@ class StrategyCompareRequest(BaseModel):
     )
     tqqq_target_ratio: float = Field(default=60, ge=0, le=100)
     qld_target_ratio: float = Field(default=70, ge=0, le=100)
+    one_x_target_ratio: float = Field(default=0, ge=0, le=100)
+    one_x_symbol: str = "QQQ"
     moving_average_days: int = Field(default=200, ge=50, le=300)
     cash_yield: float = Field(default=3.0, ge=0, le=10)
     fee_bps: float = Field(default=5, ge=0, le=100)
     slippage_bps: float = Field(default=5, ge=0, le=100)
     include_default_tqqq_comparison: bool = True
     default_tqqq_target_ratio: float = Field(default=60, ge=0, le=100)
+    monthly_contribution: float = Field(default=0, ge=0, le=20_000_000)
+    daily_base_tqqq_ratio: float = Field(default=70, ge=0, le=100)
+    daily_base_one_x_ratio: float = Field(default=30, ge=0, le=100)
 
 
 class StrategyRankItem(BaseModel):

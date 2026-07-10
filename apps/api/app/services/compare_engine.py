@@ -22,10 +22,15 @@ async def compare_strategies(request: StrategyCompareRequest) -> StrategyCompare
                     initial_capital=request.initial_capital,
                     tqqq_target_ratio=request.tqqq_target_ratio,
                     qld_target_ratio=request.qld_target_ratio,
+                    one_x_target_ratio=request.one_x_target_ratio,
+                    one_x_symbol=request.one_x_symbol,
                     moving_average_days=request.moving_average_days,
                     cash_yield=request.cash_yield,
                     fee_bps=request.fee_bps,
                     slippage_bps=request.slippage_bps,
+                    monthly_contribution=request.monthly_contribution,
+                    daily_base_tqqq_ratio=request.daily_base_tqqq_ratio,
+                    daily_base_one_x_ratio=request.daily_base_one_x_ratio,
                 )
             )
         )
@@ -66,10 +71,15 @@ async def build_sensitivity(
                 initial_capital=request.initial_capital,
                 tqqq_target_ratio=request.tqqq_target_ratio,
                 qld_target_ratio=request.qld_target_ratio,
+                one_x_target_ratio=request.one_x_target_ratio,
+                one_x_symbol=request.one_x_symbol,
                 moving_average_days=window,
                 cash_yield=request.cash_yield,
                 fee_bps=request.fee_bps,
                 slippage_bps=request.slippage_bps,
+                monthly_contribution=request.monthly_contribution,
+                daily_base_tqqq_ratio=request.daily_base_tqqq_ratio,
+                daily_base_one_x_ratio=request.daily_base_one_x_ratio,
             )
         )
         item = score_backtest(backtest, request.risk_score)
@@ -312,6 +322,7 @@ def estimate_strategy_risk(result: BacktestRunResponse) -> int:
     base = {
         "qqq_buy_hold": 45,
         "qld_200ma": 62,
+        "tqqq_daily_200ma": 72,
         "tqqq_200ma": 78,
         "tqqq_buy_hold": 95,
     }.get(result.strategy, 60)
