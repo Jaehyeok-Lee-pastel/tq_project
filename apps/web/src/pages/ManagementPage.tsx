@@ -1381,8 +1381,11 @@ export function ManagementPage() {
         </article>
 
         <article className="panel span-8">
-          <PanelTitle icon={<ClipboardCheck size={18} />} title="오늘의 운용 가이드" />
-          {guide && selected ? (
+          <PanelTitle
+            icon={<ClipboardCheck size={18} />}
+            title={selected?.research_config ? "연구전략 요약" : "오늘의 운용 가이드"}
+          />
+          {guide && selected && !selected.research_config ? (
             <>
               <div className="manage-head">
                 <div>
@@ -1429,6 +1432,33 @@ export function ManagementPage() {
                 {guide.checklist.map((item) => <label key={item}><input type="checkbox" />{item}</label>)}
               </div>
             </>
+          ) : selected?.research_config ? (
+            <div className="manage-head">
+              <div>
+                <span className="section-label">{selected.status}</span>
+                <h2>{selected.plan.title}</h2>
+                <small className="version-badge">v{selected.version}</small>
+                <p>{selected.plan.summary}</p>
+                <div className="hero-actions inline-test-actions">
+                  <button type="button" onClick={() => refreshMarketSnapshot()}>
+                    <RefreshCw size={16} />
+                    QQQ 지표 갱신
+                  </button>
+                  <button type="button" onClick={() => sendToTestLab(selected)}>
+                    <FlaskConical size={16} />
+                    이 전략으로 테스트
+                  </button>
+                  <button className="danger-button" type="button" onClick={() => void removeStrategy(selected)}>
+                    <Trash2 size={16} />
+                    전략 삭제
+                  </button>
+                </div>
+                <small className="fx-status">
+                  {marketStatus} · 저장 기준 {selected.market.as_of} · QQQ {formatUsd(selected.market.qqq_close)}
+                  {selected.market.qqq_sma200 ? ` · 200일선 ${formatUsd(selected.market.qqq_sma200)}` : ""}
+                </small>
+              </div>
+            </div>
           ) : (
             <p className="muted">채택된 전략이 있으면 이곳에 상세 가이드가 표시됩니다.</p>
           )}
@@ -1703,7 +1733,7 @@ export function ManagementPage() {
           </article>
         ) : null}
 
-        {activeTab === "overview" && guide && selected && guide.execution_plan.length > 0 ? (
+        {activeTab === "overview" && guide && selected && !selected.research_config && guide.execution_plan.length > 0 ? (
           <article className="panel span-12">
             <PanelTitle icon={<Target size={18} />} title="오늘 실행 기준" />
             <div className="execution-grid">
@@ -2014,7 +2044,7 @@ export function ManagementPage() {
 
         {(activeTab === "strategy" || activeTab === "journal") && selected ? (
           <>
-            {activeTab === "strategy" ? (
+            {activeTab === "strategy" && !selected.research_config ? (
             <article className="panel span-6">
               <PanelTitle icon={<ListChecks size={18} />} title="목표 비중과 원 규칙" />
               <div className="currency-control">
