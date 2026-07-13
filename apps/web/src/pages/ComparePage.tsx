@@ -464,6 +464,10 @@ async function requestInsight(payload: StrategyCompareResponse, useAi: boolean) 
   return (await response.json()) as InsightReport;
 }
 
+// Advanced validation remains available in the API and test suite, but is
+// intentionally hidden from the everyday research workflow.
+const SHOW_ADVANCED_VALIDATION = false;
+
 export function ComparePage() {
   const [status, setStatus] = useState("현재 보유 상태와 월 적립 규칙을 기준으로 여러 전략을 비교합니다.");
   const [loading, setLoading] = useState(false);
@@ -725,24 +729,28 @@ export function ComparePage() {
         <button className={researchTab === "montecarlo" ? "selected" : ""} onClick={() => setResearchTab("montecarlo")} type="button">
           <FlaskConical size={16} /> 미래 시뮬레이션 <small>레짐 몬테카를로</small>
         </button>
-        <button className={researchTab === "walkforward" ? "selected" : ""} onClick={() => setResearchTab("walkforward")} type="button">
-          <LineChart size={16} /> 워크포워드 <small>시간축 과최적화 검증</small>
-        </button>
-        <button className={researchTab === "heatmap" ? "selected" : ""} onClick={() => setResearchTab("heatmap")} type="button">
-          <BarChart3 size={16} /> 파라미터 지형 <small>고원 vs 봉우리</small>
-        </button>
-        <button className={researchTab === "overfitting" ? "selected" : ""} onClick={() => setResearchTab("overfitting")} type="button">
-          <ShieldCheck size={16} /> 과최적화 검증 <small>DSR · PBO 통계</small>
-        </button>
+        {SHOW_ADVANCED_VALIDATION ? (
+          <>
+            <button className={researchTab === "walkforward" ? "selected" : ""} onClick={() => setResearchTab("walkforward")} type="button">
+              <LineChart size={16} /> 워크포워드 <small>시간축 과최적화 검증</small>
+            </button>
+            <button className={researchTab === "heatmap" ? "selected" : ""} onClick={() => setResearchTab("heatmap")} type="button">
+              <BarChart3 size={16} /> 파라미터 지형 <small>고원 vs 봉우리</small>
+            </button>
+            <button className={researchTab === "overfitting" ? "selected" : ""} onClick={() => setResearchTab("overfitting")} type="button">
+              <ShieldCheck size={16} /> 과최적화 검증 <small>DSR · PBO 통계</small>
+            </button>
+          </>
+        ) : null}
       </div>
 
-      {researchTab === "walkforward" ? (
+      {SHOW_ADVANCED_VALIDATION && researchTab === "walkforward" ? (
         <WalkForwardTab report={wfReport} loading={wfLoading} onRun={runWalkForward} />
       ) : null}
-      {researchTab === "heatmap" ? (
+      {SHOW_ADVANCED_VALIDATION && researchTab === "heatmap" ? (
         <HeatmapTab report={hmReport} loading={hmLoading} onRun={runHeatmap} />
       ) : null}
-      {researchTab === "overfitting" ? (
+      {SHOW_ADVANCED_VALIDATION && researchTab === "overfitting" ? (
         <OverfittingTab report={ofReport} loading={ofLoading} onRun={runOverfitting} />
       ) : null}
 

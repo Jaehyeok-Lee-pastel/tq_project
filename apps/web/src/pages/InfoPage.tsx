@@ -17,7 +17,7 @@ const infoCards = [
     body: "TQQQ 전략과 함께 고려한 ETF, 현금성 대기자산, 제외 후보를 따로 봅니다.",
   },
   {
-    to: "/compare",
+    to: "/lab",
     icon: <GitCompareArrows size={19} />,
     label: "연구실",
     title: "기본형과 커스텀 비교",

@@ -18,6 +18,8 @@ build/
 # Local/private app data
 apps/api/data/*.json
 apps/api/data/market_cache/
+apps/api/data/migration_backups/
+supabase/manual/private/
 
 # Local agent/runtime workdirs
 .claude/

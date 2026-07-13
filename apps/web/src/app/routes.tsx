@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 
 const ComparePage = lazy(() => import("../pages/ComparePage").then((module) => ({ default: module.ComparePage })));
 const InfoPage = lazy(() => import("../pages/InfoPage").then((module) => ({ default: module.InfoPage })));
@@ -16,7 +16,7 @@ export function AppRoutes() {
         <Route path="/" element={<StrategyPage />} />
         <Route path="/lab" element={<ComparePage />} />
         <Route path="/info" element={<InfoPage />} />
-        <Route path="/compare" element={<ComparePage />} />
+        <Route path="/compare" element={<Navigate to="/lab" replace />} />
         <Route path="/manage" element={<ManagementPage />} />
         <Route path="/universe" element={<UniversePage />} />
         <Route path="/rules" element={<RulesPage />} />
