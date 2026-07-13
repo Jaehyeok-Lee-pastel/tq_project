@@ -11,3 +11,5 @@ def test_health_ok():
     body = res.json()
     assert body["ok"] is True
     assert "service" in body
+    assert "ready" in body
+    assert set(body["checks"]) == {"supabase", "cors", "market_data"}

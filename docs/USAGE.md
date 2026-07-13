@@ -45,7 +45,8 @@ npm install
 npm run dev                                     # http://localhost:5173
 ```
 
-초기 화면(`HomePage`)이 백엔드 `/health`를 호출해 연결을 확인한다.
+첫 화면은 `전략 수립`이며, 상단 메뉴에서 `오늘 판단`, `개인연구`, `추가정보`로 이동한다.
+백엔드 상태는 `/health`의 `ready`와 `checks`로 운영 설정까지 함께 확인한다.
 
 ### DB (Supabase)
 

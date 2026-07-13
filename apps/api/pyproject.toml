@@ -7,6 +7,9 @@ target-version = "py310"
 [tool.ruff.lint]
 # E/F = pyflakes+pycodestyle, I = isort, UP = pyupgrade, B = bugbear
 select = ["E", "F", "I", "UP", "B"]
+# Korean user-facing guidance is intentionally kept as readable sentences.
+# Formatting and correctness checks still run; only physical line length is ignored.
+ignore = ["E501"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

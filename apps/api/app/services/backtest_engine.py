@@ -974,12 +974,13 @@ def build_projection(
 ) -> list[ProjectionScenario]:
     returns = adjusted_returns(curve)
     if not returns:
-        annualized_mean = 0
+        base_annual_return = 0
         annualized_volatility = 0
     else:
         mean_return = sum(returns) / len(returns)
         variance = sum((item - mean_return) ** 2 for item in returns) / max(len(returns) - 1, 1)
-        annualized_mean = mean_return * TRADING_DAYS_PER_YEAR
+        growth = compound_returns(returns)
+        base_annual_return = growth ** (TRADING_DAYS_PER_YEAR / len(returns)) - 1
         annualized_volatility = sqrt(variance) * sqrt(TRADING_DAYS_PER_YEAR)
 
     yearly_contribution = request.monthly_contribution * 12
@@ -987,14 +988,14 @@ def build_projection(
     scenarios = [
         (
             "bear",
-            annualized_mean - annualized_volatility,
-            "과거 변동성을 반영한 보수 시나리오입니다.",
+            max(base_annual_return - annualized_volatility, -0.95),
+            "과거 기하수익률에서 연환산 변동성을 차감한 보수 시나리오입니다.",
         ),
-        ("base", annualized_mean, "과거 일평균 수익률을 단순 연율화한 기준 시나리오입니다."),
+        ("base", base_annual_return, "과거 시간가중 기하수익률을 연율화한 기준 시나리오입니다."),
         (
             "bull",
-            annualized_mean + annualized_volatility,
-            "과거 변동성을 반영한 낙관 시나리오입니다.",
+            base_annual_return + annualized_volatility,
+            "과거 기하수익률에 연환산 변동성을 더한 낙관 시나리오입니다.",
         ),
     ]
     output: list[ProjectionScenario] = []
@@ -1032,6 +1033,10 @@ def build_interpretation(
         ),
         "미래 모의 수익은 예측이 아니라 과거 수익률과 변동성을 이용한 시나리오입니다.",
     ]
+    if metrics.cagr >= 35:
+        notes.append(
+            "연환산 수익률이 35% 이상으로 매우 높습니다. 합성 데이터 구간, 특정 상승장 편중, 세금·환율·추적오차를 반드시 함께 확인하세요."
+        )
     if request.strategy in {"tqqq_200ma", "qld_200ma", "tqqq_daily_200ma"}:
         effective_defense = request.defense_mode or (
             "hold_one_x" if request.strategy == "tqqq_daily_200ma" else "cash"

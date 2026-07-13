@@ -1,4 +1,4 @@
-import { Award, CheckCircle2, Database, Gauge, ShieldCheck } from "lucide-react";
+import { Award, Database, Gauge, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 
 type CandidateStatus = "selected" | "watch" | "excluded";

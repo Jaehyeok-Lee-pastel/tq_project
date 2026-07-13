@@ -61,7 +61,7 @@ def _use_supabase(user_id: str | None) -> bool:
 
 def _shared_file_allowed() -> bool:
     """The local JSON file is a dev convenience; never expose it when deployed."""
-    return settings.app_env.lower() in LOCAL_ENVS
+    return not settings.is_deployed and settings.app_env.lower() in LOCAL_ENVS
 
 
 def _ensure_writable(user_id: str | None) -> None:

@@ -26,11 +26,34 @@ class Settings(BaseSettings):
     market_data_provider: str = "yahoo"
     market_data_api_key: str = ""
 
+    # Railway injects these automatically. They keep production fail-closed
+    # even when APP_ENV was accidentally left as "local" in the dashboard.
+    railway_project_id: str = ""
+    railway_environment_name: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @cached_property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def is_deployed(self) -> bool:
+        return bool(
+            self.railway_project_id
+            or self.railway_environment_name
+            or self.app_env.lower() not in {"local", "dev", "development", "test"}
+        )
+
+    @property
+    def supabase_ready(self) -> bool:
+        return bool(self.supabase_url and self.supabase_service_role_key)
+
+    @property
+    def cors_ready(self) -> bool:
+        if not self.is_deployed:
+            return True
+        return any(not origin.startswith(("http://localhost", "http://127.0.0.1")) for origin in self.cors_origins_list)
 
 
 settings = Settings()

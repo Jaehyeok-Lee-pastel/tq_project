@@ -11,7 +11,7 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 # VITE_* vars are inlined at build time. Pass with --build-arg + ARG/ENV for a
-# real deploy; defaults point at http://localhost:8000.
+# real deploy; local development defaults point at http://localhost:8000.
 RUN npm run build
 
 # --- serve stage ---

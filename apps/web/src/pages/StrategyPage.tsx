@@ -10,7 +10,7 @@ import {
   Target,
   Trash2,
 } from "lucide-react";
-import { supabase } from "../lib/supabase";
+import { authenticatedFetch } from "../lib/authApi";
 
 type PriceRow = { date: string; close: number };
 const AUTO_MARKET_REFRESH_MS = 30 * 60 * 1000;
@@ -280,11 +280,9 @@ async function requestRecommendation(
   return (await response.json()) as StrategyResponse;
 }
 async function adoptManagedStrategy(plan: StrategyPlan, market: MarketSnapshot, totalCapital: number) {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  const response = await fetch(`${apiBaseUrl}/managed-strategies`, {
+  const response = await authenticatedFetch(`${apiBaseUrl}/managed-strategies`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       plan,
       market,

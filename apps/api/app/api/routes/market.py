@@ -1,5 +1,5 @@
-from datetime import date, datetime, timezone
-from typing import Literal
+from datetime import datetime, timezone
+from typing import Annotated, Literal
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query
@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.services.market_data import (
     MarketDataError,
     PriceRow,
+    business_days_since,
     fetch_provider_history,
     parse_yahoo_chart,
 )
@@ -78,6 +79,9 @@ class DataReliabilityItem(BaseModel):
     score: int = Field(ge=0, le=100)
     status: Literal["ok", "watch", "danger"]
     message: str
+    secondary_provider: str | None = None
+    secondary_latest_date: str | None = None
+    close_gap_pct: float | None = None
 
 
 class DataReliabilityResponse(BaseModel):
@@ -100,11 +104,7 @@ def calculate_high(rows: list[PriceRow], length: int) -> float | None:
 
 
 def data_age_days(latest_date: str) -> int:
-    try:
-        parsed = date.fromisoformat(latest_date)
-    except ValueError:
-        return 999
-    return max((datetime.now(timezone.utc).date() - parsed).days, 0)
+    return business_days_since(latest_date)
 
 
 def reliability_item(symbol: str, provider: str, rows: list[PriceRow]) -> DataReliabilityItem:
@@ -162,6 +162,38 @@ def reliability_failure_item(symbol: str, provider: str, reason: str) -> DataRel
         score=0,
         status="danger",
         message=f"시세 제공자 연결에 실패했습니다. 저장된 지표나 대체 소스로 확인하세요. 원인: {reason}",
+    )
+
+
+def apply_cross_validation(
+    item: DataReliabilityItem,
+    primary_close: float,
+    secondary_provider: str,
+    secondary_rows: list[PriceRow],
+) -> DataReliabilityItem:
+    secondary = secondary_rows[-1]
+    gap = abs(primary_close / secondary.close - 1) * 100 if secondary.close else 999.0
+    score = item.score
+    status = item.status
+    if gap > 2:
+        score = max(score - 30, 0)
+        status = "danger"
+        message = f"두 시세 제공자의 QQQ 종가 차이가 {gap:.2f}%로 커서 판단에 사용하면 안 됩니다."
+    elif gap > 0.8:
+        score = max(score - 10, 0)
+        status = "watch" if status == "ok" else status
+        message = f"두 시세 제공자의 QQQ 종가 차이가 {gap:.2f}%입니다. 최신 거래일을 확인하세요."
+    else:
+        message = f"{item.message} {secondary_provider} 교차검증 차이 {gap:.2f}%입니다."
+    return item.model_copy(
+        update={
+            "score": score,
+            "status": status,
+            "message": message,
+            "secondary_provider": secondary_provider,
+            "secondary_latest_date": secondary.date,
+            "close_gap_pct": round(gap, 2),
+        }
     )
 
 
@@ -242,18 +274,34 @@ async def get_usd_krw_rate() -> FxRateResponse:
 
 @router.get("/reliability", response_model=DataReliabilityResponse)
 async def get_data_reliability(
-    symbols: list[AllowedSymbol] = Query(default=["QQQ", "TQQQ", "QLD", "SGOV"]),
+    symbols: Annotated[list[AllowedSymbol] | None, Query()] = None,
 ) -> DataReliabilityResponse:
     provider = settings.market_data_provider.lower()
     if provider not in {"yahoo", "stooq"}:
         raise HTTPException(status_code=501, detail=f"Provider is not configured: {provider}")
 
     items: list[DataReliabilityItem] = []
-    unique_symbols = list(dict.fromkeys(symbols))
+    requested_symbols = symbols or ["QQQ", "TQQQ", "QLD", "SGOV"]
+    unique_symbols = list(dict.fromkeys(requested_symbols))
     for symbol in unique_symbols:
         try:
             rows = await fetch_provider_history(symbol, provider)
-            items.append(reliability_item(symbol, provider, rows))
+            item = reliability_item(symbol, provider, rows)
+            if symbol == "QQQ":
+                secondary_provider = "stooq" if provider == "yahoo" else "yahoo"
+                try:
+                    secondary_rows = await fetch_provider_history(symbol, secondary_provider)
+                    item = apply_cross_validation(item, rows[-1].close, secondary_provider, secondary_rows)
+                except (MarketDataError, httpx.HTTPError) as exc:
+                    item = item.model_copy(
+                        update={
+                            "status": "watch" if item.status == "ok" else item.status,
+                            "score": max(item.score - 5, 0),
+                            "message": f"{item.message} 보조 제공자 교차확인은 실패했습니다: {exc}",
+                            "secondary_provider": secondary_provider,
+                        }
+                    )
+            items.append(item)
         except MarketDataError as exc:
             items.append(reliability_failure_item(symbol, provider, str(exc)))
         except httpx.HTTPError as exc:

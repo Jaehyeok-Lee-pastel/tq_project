@@ -107,6 +107,10 @@ python -m scripts.validate_synthetic
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
+Railway API must use `APP_ENV=production`. The application also detects
+Railway's injected project variables and disables shared local storage even if
+this value is accidentally left as `local`.
+
 ### Web service
 
 - `VITE_API_BASE_URL`
@@ -125,6 +129,7 @@ Backend:
 
 ```powershell
 cd apps/api
+python -m ruff check --no-cache .
 python -m pytest
 ```
 
@@ -132,14 +137,15 @@ Frontend:
 
 ```powershell
 cd apps/web
+npm run lint
 npm run build
+npm run test:e2e
 ```
 
-## Current QA Priorities
+## Release Gate
 
-1. Browser flow: login -> strategy recommendation -> adopt strategy -> manage strategy -> test lab.
-2. Mobile and narrow viewport layout check.
-3. Supabase row-level security and user data separation review.
-4. Stored-strategy backtest accuracy improvement.
-5. README and operational notes kept in sync with deployment.
-
+1. GitHub Actions API and web jobs are green.
+2. `/health` returns `ready: true` in production.
+3. Browser flow and mobile overflow Playwright tests pass.
+4. Supabase migrations and RLS policies are applied.
+5. Backtest results are interpreted with data notes and scenario limitations.

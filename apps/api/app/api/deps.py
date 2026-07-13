@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import Depends, Header, HTTPException, status
 
 from app.core.auth import CurrentUser, verify_token
+from app.core.config import settings
 
 
 async def get_current_user(
@@ -37,3 +38,24 @@ async def get_optional_current_user(
 
 
 OptionalCurrentUserDep = Annotated[CurrentUser | None, Depends(get_optional_current_user)]
+
+
+async def get_managed_user(
+    authorization: Annotated[str | None, Header()] = None,
+) -> CurrentUser | None:
+    """Require login for managed data in every deployed environment.
+
+    Anonymous access remains available only for an explicitly local developer
+    session where the JSON repository is intentionally used as a preview.
+    """
+    if authorization:
+        return await get_current_user(authorization)
+    if not settings.is_deployed:
+        return None
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Login is required for managed strategy data",
+    )
+
+
+ManagedUserDep = Annotated[CurrentUser | None, Depends(get_managed_user)]

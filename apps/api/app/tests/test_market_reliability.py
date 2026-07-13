@@ -1,6 +1,12 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
-from app.api.routes.market import PriceRow, reliability_failure_item, reliability_item
+from app.api.routes.market import (
+    PriceRow,
+    apply_cross_validation,
+    reliability_failure_item,
+    reliability_item,
+)
+from app.services.market_data import business_days_since
 
 
 def make_rows(count: int, latest_offset_days: int = 0) -> list[PriceRow]:
@@ -40,3 +46,33 @@ def test_reliability_failure_item_marks_provider_error_as_danger():
     assert item.row_count == 0
     assert item.has_sma200 is False
     assert "시세 제공자 연결에 실패" in item.message
+
+
+def test_business_day_age_does_not_penalize_weekend():
+    assert business_days_since("2026-07-10", date(2026, 7, 12)) == 0
+    assert business_days_since("2026-07-10", date(2026, 7, 13)) == 1
+
+
+def test_business_day_age_rejects_invalid_date():
+    assert business_days_since("not-a-date", date(2026, 7, 13)) == 999
+
+
+def test_cross_validation_accepts_small_qqq_gap():
+    item = reliability_item("QQQ", "yahoo", make_rows(300))
+    secondary = [PriceRow(date=item.latest_date, close=make_rows(300)[-1].close * 1.004)]
+
+    checked = apply_cross_validation(item, make_rows(300)[-1].close, "stooq", secondary)
+
+    assert checked.status == "ok"
+    assert checked.close_gap_pct is not None and checked.close_gap_pct < 0.8
+
+
+def test_cross_validation_blocks_large_qqq_gap():
+    rows = make_rows(300)
+    item = reliability_item("QQQ", "yahoo", rows)
+    secondary = [PriceRow(date=item.latest_date, close=rows[-1].close * 1.05)]
+
+    checked = apply_cross_validation(item, rows[-1].close, "stooq", secondary)
+
+    assert checked.status == "danger"
+    assert checked.score < item.score

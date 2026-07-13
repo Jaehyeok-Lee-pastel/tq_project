@@ -1,10 +1,8 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BookOpenCheck, ClipboardCheck, FlaskConical, History, ListChecks, RefreshCw, Save, SlidersHorizontal, Target, Trash2 } from "lucide-react";
-import { useAuth } from "../app/AuthContext";
-import { supabase } from "../lib/supabase";
-
 import { API_BASE_URL as apiBaseUrl } from "../lib/api";
+import { authenticatedJson } from "../lib/authApi";
 const userSettingsKey = "tqcoach.userSettings";
 const AUTO_MARKET_REFRESH_MS = 30 * 60 * 1000;
 
@@ -341,12 +339,7 @@ function marketDataFreshness(asOf: string) {
   return { level: "danger", label: `${ageDays}일 전 데이터` };
 }
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const { data } = await supabase.auth.getSession();
-  const headers = new Headers(init?.headers);
-  if (data.session?.access_token) headers.set("Authorization", `Bearer ${data.session.access_token}`);
-  const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers });
-  if (!response.ok) throw new Error(`API 오류: ${response.status}`);
-  return (await response.json()) as T;
+  return authenticatedJson<T>(`${apiBaseUrl}${path}`, init);
 }
 function allocationPolicy(symbol: string) {
   if (symbol === "TQQQ" || symbol === "QLD") {
@@ -464,7 +457,6 @@ function reviewEntry(entry: JournalEntry) {
 
 export function ManagementPage() {
   const navigate = useNavigate();
-  const { configured, user } = useAuth();
   const initialSettings = useMemo(() => loadUserSettings(), []);
   const [strategies, setStrategies] = useState<ManagedStrategy[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -770,80 +762,12 @@ export function ManagementPage() {
     return { score, entries, summary };
   }, [selected]);
 
-  const reloadCoach = useMemo(() => {
-    if (!selected) return null;
-    const tqqqAllocation = selected.plan.allocations.find((allocation) => allocation.symbol === "TQQQ");
-    if (!tqqqAllocation) return null;
-    const tqqqRow = executionRows.find((row) => row.symbol === "TQQQ");
-    const progressPct = tqqqRow?.progressPct ?? 0;
-    const distance = (selected.market.qqq_close / selected.market.qqq_sma200 - 1) * 100;
-    const isThirdDone = progressPct >= 95;
-    const targetGap = Math.max(tqqqAllocation.target_amount - (tqqqRow?.executedAmount ?? 0), 0);
-    const readyBuy = guide?.execution_plan.find((step) => step.side === "buy" && step.symbol === "TQQQ" && step.status === "ready");
-    const executableAmount = readyBuy ? Math.min(readyBuy.amount, targetGap || readyBuy.amount) : 0;
-    const idleCashUse = Math.min(cashStatus.idleCash, executableAmount);
-    const shortage = Math.max(executableAmount - idleCashUse, 0);
-    const sgovSellNeed = Math.min(cashStatus.cashLikeValue, shortage);
-    const remainingShortage = Math.max(shortage - sgovSellNeed, 0);
-    let verdict: "ok" | "watch" | "danger" = "watch";
-    let headline = "3차 이후 추가 TQQQ 매수는 대기입니다.";
-    const reasons: string[] = [];
-
-    if (distance <= 0) {
-      verdict = "danger";
-      headline = "QQQ가 200일선 아래라 추가 TQQQ 매수는 금지입니다.";
-      reasons.push("200일선 아래에서는 SGOV/CASH를 공격 재원으로 전환하지 않습니다.");
-    } else if (distance >= 15) {
-      verdict = "danger";
-      headline = "QQQ 200일선 이격이 커서 3차 이후 추가매수는 금지입니다.";
-      reasons.push("3차 완료 여부와 관계없이 +15% 이상 구간에서는 눌림 없는 재장전을 막습니다.");
-    } else if (!isThirdDone) {
-      verdict = "watch";
-      headline = "아직 기존 분할매수 사이클이 끝나지 않았습니다.";
-      reasons.push("추가 TQQQ 매수보다 1~3차 원래 규칙을 먼저 따릅니다.");
-    } else if (targetGap < selected.total_capital * 0.02) {
-      verdict = "watch";
-      headline = "3차 완료 후 목표 TQQQ 비중이 거의 찼습니다.";
-      reasons.push("새 추가금이나 전략 버전 변경으로 목표금액이 늘기 전까지 추가매수하지 않습니다.");
-    } else if (distance <= 5 || readyBuy) {
-      verdict = "ok";
-      headline = "3차 이후 재장전 검토가 가능합니다.";
-      reasons.push("목표금액 대비 미달분이 있고 QQQ 이격도가 완화되어 있습니다.");
-    } else {
-      verdict = "watch";
-      headline = "3차 이후 재장전은 더 깊은 눌림을 기다립니다.";
-      reasons.push("QQQ가 200일선 대비 +5%를 넘는 동안에는 SGOV를 서둘러 공격 재원으로 바꾸지 않습니다.");
-    }
-
-    const fundingGuide = executableAmount > 0
-      ? [
-          `실행 후보 금액: ${formatKrw(executableAmount)}`,
-          `미사용 현금 우선 사용: ${formatKrw(idleCashUse)}`,
-          sgovSellNeed > 0 ? `부족분은 SGOV/BIL에서 최대 ${formatKrw(sgovSellNeed)} 매도 후 사용` : "미사용 현금만으로 실행 가능",
-          remainingShortage > 0 ? `아직 부족한 금액 ${formatKrw(remainingShortage)}은 추가 입금 전까지 대기` : "재원 부족 없음",
-        ]
-      : [
-          "현재는 실행 후보 금액이 없습니다.",
-          "SGOV/BIL은 매수 조건이 켜질 때까지 현금성 대기자산으로 유지합니다.",
-        ];
-
-    return {
-      verdict,
-      headline,
-      isThirdDone,
-      progressPct,
-      targetGap,
-      distance,
-      readyBuy,
-      reasons,
-      fundingGuide,
-    };
-  }, [cashStatus.cashLikeValue, cashStatus.idleCash, executionRows, guide, selected]);
-
   useEffect(() => {
     void loadStrategies();
     void loadFxRate();
     void loadDataReliability();
+    // Initial hydration only; loaders update state and are intentionally not reactive.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -860,6 +784,8 @@ export function ManagementPage() {
 
   useEffect(() => {
     if (selected) void loadLiveQuotes(selected);
+    // Quotes refresh when strategy identity or display FX changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id, usdKrwRate]);
 
   useEffect(() => {
@@ -869,6 +795,8 @@ export function ManagementPage() {
       void refreshMarketSnapshot({ silent: true });
     }, AUTO_MARKET_REFRESH_MS);
     return () => window.clearInterval(timer);
+    // One timer per selected strategy; refresh callback reads the latest state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id]);
 
   async function loadStrategies() {
@@ -1574,7 +1502,9 @@ export function ManagementPage() {
         {activeTab === "overview" && selected ? (
           <article className="panel span-12">
             <PanelTitle icon={<Target size={18} />} title="오늘의 판단과 보유 현황" />
-            <div className="data-reliability-card">
+            <details className="secondary-details">
+              <summary>데이터 신뢰도 상세</summary>
+              <div className="data-reliability-card">
               <div>
                 <span className="section-label">Data Reliability</span>
                 <h3>판단 기준 데이터 점검</h3>
@@ -1630,7 +1560,8 @@ export function ManagementPage() {
                 <RefreshCw size={16} />
                 데이터 신뢰도 갱신
               </button>
-            </div>
+              </div>
+            </details>
             <div className="cash-command-card">
               <div>
                 <span className="section-label">Cash Command</span>
@@ -1693,7 +1624,9 @@ export function ManagementPage() {
                 </div>
               </div>
             </div>
-            <div className="risk-budget-card">
+            <details className="secondary-details">
+              <summary>전략 한도 상세</summary>
+              <div className="risk-budget-card">
               <div>
                 <span className="section-label">Risk Budget</span>
                 <h3>전략 한도 점검</h3>
@@ -1708,7 +1641,8 @@ export function ManagementPage() {
                   </span>
                 ))}
               </div>
-            </div>
+              </div>
+            </details>
             <div className="execution-summary-grid">
               {executionRows.map((row) => (
                 <div className="execution-summary-card" key={row.symbol}>

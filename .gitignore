@@ -14,6 +14,8 @@ dist/
 build/
 .vite/
 *.tsbuildinfo
+test-results/
+playwright-report/
 
 # Local/private app data
 apps/api/data/*.json

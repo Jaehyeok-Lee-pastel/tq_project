@@ -125,6 +125,7 @@ type CompareConfig = {
 };
 
 import { API_BASE_URL as apiBaseUrl } from "../lib/api";
+import { authenticatedFetch } from "../lib/authApi";
 const chartColors = ["#2563eb", "#0f8a63", "#a96700", "#d04444", "#7c3aed"];
 
 const allStrategies: { id: BacktestStrategy; label: string }[] = [
@@ -445,7 +446,7 @@ async function requestAdopt(
     source_cagr: item.cagr,
     source_max_drawdown: item.max_drawdown,
   };
-  const response = await fetch(`${apiBaseUrl}/managed-strategies/adopt-research`, {
+  const response = await authenticatedFetch(`${apiBaseUrl}/managed-strategies/adopt-research`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

@@ -13,7 +13,7 @@ Design goals (see docs/01_strategy_philosophy):
 
 import json
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from io import StringIO
 from pathlib import Path
 
@@ -25,6 +25,24 @@ CACHE_TTL_SECONDS = 600
 CACHE_DIR = Path(__file__).resolve().parents[2] / "data" / "market_cache"
 
 _memory_cache: dict[str, tuple[float, list["PriceRow"]]] = {}
+
+
+def business_days_since(latest_date: str, today: date | None = None) -> int:
+    """Count weekdays after the latest observation, excluding weekends."""
+    try:
+        latest = date.fromisoformat(latest_date)
+    except ValueError:
+        return 999
+    current = today or datetime.now(timezone.utc).date()
+    if latest >= current:
+        return 0
+    cursor = latest + timedelta(days=1)
+    count = 0
+    while cursor <= current:
+        if cursor.weekday() < 5:
+            count += 1
+        cursor += timedelta(days=1)
+    return count
 
 
 class PriceRow(BaseModel):

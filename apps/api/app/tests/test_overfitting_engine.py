@@ -1,7 +1,5 @@
 """DSR / PBO pure math checks (no network)."""
 
-import math
-
 from app.services.overfitting_engine import (
     _daily_sharpe,
     _deflated_sharpe,

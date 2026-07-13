@@ -2930,6 +2930,24 @@ tr:last-child td { border-bottom: 0; }
   border-width: 2px;
 }
 
+.secondary-details {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.secondary-details > summary {
+  align-items: center;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  font-size: 14px;
+  font-weight: 700;
+  min-height: 40px;
+}
+.secondary-details[open] > summary {
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+
 @media (max-width: 760px) {
   .backtest-detail-grid,
   .detail-metric-grid,
