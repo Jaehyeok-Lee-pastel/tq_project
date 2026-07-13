@@ -1,5 +1,5 @@
-from app.services.backtest_engine import BacktestFrame, simulate_strategy
 from app.schemas.backtest import BacktestRunRequest
+from app.services.backtest_engine import BacktestFrame, simulate_strategy
 
 
 def frame(
@@ -16,6 +16,7 @@ def frame(
         qqq=qqq,
         tqqq=tqqq,
         qld=tqqq * 0.8,
+        spy=qqq,
         sma200=sma200,
         sma20=sma20,
         sma50=sma50,

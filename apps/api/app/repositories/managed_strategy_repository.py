@@ -6,13 +6,16 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.core.config import settings
+from app.core.errors import UserFacingPermissionError
+from app.schemas.backtest import BacktestRunRequest
 from app.schemas.managed_strategy import (
+    ComplianceIssue,
     ContributionAllocationAdvice,
     ContributionPlanAdvice,
     ContributionPlanApplyRequest,
     ContributionPlanOption,
     ContributionPlanRequest,
-    ComplianceIssue,
+    DepositRequest,
     ManagedStrategy,
     ManagedStrategyCreate,
     ManagedStrategyGuide,
@@ -30,13 +33,22 @@ from app.schemas.managed_strategy import (
     StrategyVersionAllocation,
     StrategyVersionEntry,
 )
-from app.schemas.backtest import BacktestRunRequest
-from app.schemas.strategy import HoldingInput, InvestorProfile, StrategyPlan, StrategyRecommendRequest
+from app.schemas.strategy import (
+    HoldingInput,
+    InvestorProfile,
+    StrategyRecommendRequest,
+)
 from app.services.strategy_engine import recommend_strategy
 from app.services.supabase import get_supabase
 
 DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "managed_strategies.json"
 SUPABASE_TABLE = "managed_strategies"
+LOCAL_ENVS = {"local", "dev", "development", "test"}
+
+
+class SharedStorageWriteBlocked(UserFacingPermissionError):
+    """Raised when an anonymous write would land in the shared JSON file on a
+    deployed environment, where it would mix data across users."""
 
 
 def utc_now() -> str:
@@ -45,6 +57,21 @@ def utc_now() -> str:
 
 def _use_supabase(user_id: str | None) -> bool:
     return bool(user_id and settings.supabase_url and settings.supabase_service_role_key)
+
+
+def _shared_file_allowed() -> bool:
+    """The local JSON file is a dev convenience; never expose it when deployed."""
+    return settings.app_env.lower() in LOCAL_ENVS
+
+
+def _ensure_writable(user_id: str | None) -> None:
+    if _use_supabase(user_id):
+        return
+    if _shared_file_allowed():
+        return
+    raise SharedStorageWriteBlocked(
+        "배포 환경에서는 로그인(그리고 Supabase 설정) 없이 전략을 저장할 수 없습니다."
+    )
 
 
 def _load(user_id: str | None = None) -> list[ManagedStrategy]:
@@ -58,6 +85,10 @@ def _load(user_id: str | None = None) -> list[ManagedStrategy]:
             .execute()
         )
         return [ManagedStrategy.model_validate(row["data"]) for row in response.data]
+    if not _shared_file_allowed():
+        # Never serve the shared dev file on a deployed environment: it could
+        # leak strategies across users. Anonymous readers just see nothing.
+        return []
     if not DATA_PATH.exists():
         return []
     raw = json.loads(DATA_PATH.read_text(encoding="utf-8"))
@@ -65,6 +96,7 @@ def _load(user_id: str | None = None) -> list[ManagedStrategy]:
 
 
 def _save(items: list[ManagedStrategy], user_id: str | None = None) -> None:
+    _ensure_writable(user_id)
     if _use_supabase(user_id):
         rows = [
             {
@@ -102,6 +134,31 @@ def build_backtest_request_from_strategy(
     projection_years: int = 3,
     cash_yield: float = 3.0,
 ) -> BacktestRunRequest:
+    if strategy.research_config is not None:
+        # Run exactly the rules the research lab validated, starting from the
+        # strategy's current holdings split.
+        config = strategy.research_config
+        total = max(strategy.total_capital, 1)
+        return BacktestRunRequest(
+            strategy=config.strategy,
+            initial_capital=total,
+            initial_tqqq_value=_allocation_ratio(strategy, "TQQQ") / 100 * total,
+            initial_one_x_value=_allocation_ratio(strategy, config.one_x_symbol) / 100 * total,
+            initial_cash_value=_allocation_ratio(strategy, "CASH") / 100 * total,
+            monthly_contribution=config.monthly_contribution,
+            daily_base_tqqq_ratio=config.daily_base_tqqq_ratio,
+            daily_base_one_x_ratio=config.daily_base_one_x_ratio,
+            one_x_symbol=config.one_x_symbol,
+            ma_exit_band_pct=config.ma_exit_band_pct,
+            defense_mode=config.defense_mode,
+            one_x_upfront_monthly=config.one_x_upfront_monthly,
+            moving_average_days=config.moving_average_days,
+            tqqq_target_ratio=config.tqqq_target_ratio,
+            qld_target_ratio=config.qld_target_ratio,
+            cash_yield=cash_yield,
+            projection_years=projection_years,
+        )
+
     tqqq_ratio = _allocation_ratio(strategy, "TQQQ")
     qld_ratio = _allocation_ratio(strategy, "QLD")
     one_x_ratio = _one_x_buffer_ratio(strategy)
@@ -152,6 +209,93 @@ def create_strategy(payload: ManagedStrategyCreate, user_id: str | None = None) 
     items.insert(0, strategy)
     _save(items, user_id)
     return strategy
+
+
+def apply_deposit(
+    strategy_id: str,
+    payload: DepositRequest,
+    user_id: str | None = None,
+) -> ManagedStrategy:
+    """Salary-day deposit: grow cash + total capital, log it, bump version."""
+    items = _load(user_id)
+    for index, strategy in enumerate(items):
+        if strategy.id != strategy_id:
+            continue
+        before = _version_allocations_from_plan(strategy.plan)
+        data = strategy.model_dump()
+        new_total = strategy.total_capital + payload.amount
+
+        allocations = data["plan"]["allocations"]
+        cash_allocation = next(
+            (item for item in allocations if item["symbol"].upper() == "CASH"), None
+        )
+        if cash_allocation is None:
+            cash_allocation = {
+                "symbol": "CASH",
+                "name": "현금/SGOV",
+                "target_ratio": 0.0,
+                "target_amount": 0.0,
+                "role": "방어·집행 대기",
+            }
+            allocations.append(cash_allocation)
+        cash_allocation["target_amount"] = round(cash_allocation["target_amount"] + payload.amount, 2)
+        for item in allocations:
+            item["target_ratio"] = round(item["target_amount"] / new_total * 100, 1) if new_total else 0.0
+
+        data["total_capital"] = new_total
+        now = utc_now()
+        distance = (strategy.market.qqq_close / strategy.market.qqq_sma200 - 1) * 100
+        entry = StrategyJournalEntry(
+            entry_type="deposit",
+            symbol="CASH",
+            amount=payload.amount,
+            quantity=0,
+            price=0,
+            reason="월급 추가금 입금 — 규칙에 따라 일 단위로 분할 집행됩니다",
+            mood="calm",
+            note=payload.note or "월급일 정기 입금",
+            id=uuid4().hex,
+            created_at=now,
+            qqq_close=strategy.market.qqq_close,
+            qqq_sma200=strategy.market.qqq_sma200,
+            qqq_distance_from_200ma=round(distance, 2),
+        )
+        data["journal"] = [*data["journal"], entry.model_dump()]
+        data["version"] = strategy.version + 1
+        data["updated_at"] = now
+        updated = ManagedStrategy.model_validate(data)
+        data["version_history"] = [
+            *data["version_history"],
+            StrategyVersionEntry(
+                version=updated.version,
+                created_at=now,
+                change_type="manual",
+                title=f"월급 추가금 {payload.amount:,.0f}원 입금",
+                note=payload.note,
+                before_allocations=before,
+                after_allocations=_version_allocations_from_plan(updated.plan),
+            ).model_dump(),
+        ]
+        items[index] = ManagedStrategy.model_validate(data)
+        _save(items, user_id)
+        return items[index]
+    raise KeyError(strategy_id)
+
+
+def delete_strategy(strategy_id: str, user_id: str | None = None) -> list[ManagedStrategy]:
+    _ensure_writable(user_id)
+    items = _load(user_id)
+    remaining = [strategy for strategy in items if strategy.id != strategy_id]
+    if len(remaining) == len(items):
+        raise KeyError(strategy_id)
+    if _use_supabase(user_id):
+        # _save only upserts; removal needs an explicit delete scoped to the user.
+        get_supabase().table(SUPABASE_TABLE).delete().eq("id", strategy_id).eq(
+            "user_id", user_id
+        ).execute()
+    else:
+        _save(remaining, user_id)
+    return remaining
 
 
 def update_strategy(strategy_id: str, payload: ManagedStrategyUpdate, user_id: str | None = None) -> ManagedStrategy:
@@ -651,7 +795,7 @@ def apply_contribution(strategy_id: str, payload: ContributionPlanApplyRequest, 
                 created_at=data["updated_at"],
                 change_type="manual",
                 title=payload.accepted_headline or (selected_plan.headline if selected_plan else advice.headline),
-                note=" / ".join((selected_plan.actions if selected_plan else advice.actions)),
+                note=" / ".join(selected_plan.actions if selected_plan else advice.actions),
                 before_allocations=_version_allocations_from_plan(strategy.plan),
                 after_allocations=_version_allocations_from_plan(ManagedStrategy.model_validate(data).plan),
             )
@@ -843,6 +987,10 @@ def _build_issues(
 
 
 def build_execution_plan(strategy: ManagedStrategy, distance: float) -> list[SplitExecutionStep]:
+    if strategy.research_config is not None and strategy.research_config.strategy == "tqqq_daily_200ma":
+        # Daily-accumulation strategies don't follow the staged 1/2/3-step
+        # ladder; the today-decision endpoint drives their execution instead.
+        return []
     target_symbol = "TQQQ" if _allocation_ratio(strategy, "TQQQ") else "QLD"
     plan: list[SplitExecutionStep] = []
     for index, step in enumerate(strategy.plan.buy_plan):

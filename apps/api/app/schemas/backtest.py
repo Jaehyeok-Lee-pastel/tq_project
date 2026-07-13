@@ -10,6 +10,12 @@ BacktestStrategy = Literal[
     "tqqq_daily_200ma",
 ]
 
+# What the portfolio holds while QQQ is below the MA200 exit line.
+# - cash: everything defensive earns the cash/SGOV yield (final philosophy doc)
+# - spym_sgov_half: 50% SPYM (S&P 1x) + 50% SGOV/cash (community-rule variant)
+# - hold_one_x: keep the 1x sleeve invested; only TQQQ is defended
+DefenseMode = Literal["cash", "spym_sgov_half", "hold_one_x"]
+
 
 class BacktestRunRequest(BaseModel):
     strategy: BacktestStrategy = "tqqq_200ma"
@@ -31,6 +37,36 @@ class BacktestRunRequest(BaseModel):
     initial_tqqq_value: float = Field(default=0, ge=0, le=1_000_000_000)
     initial_one_x_value: float = Field(default=0, ge=0, le=1_000_000_000)
     initial_cash_value: float = Field(default=0, ge=0, le=1_000_000_000)
+    # Rule-robustness experiment knobs. Defaults reproduce the base rules;
+    # the compare engine perturbs them to test how curve-fit the rules are.
+    disparity_band_scale: float = Field(default=1.0, ge=0.5, le=1.5)
+    daily_decel_mid: float = Field(default=0.65, ge=0, le=1)
+    daily_decel_high: float = Field(default=0.30, ge=0, le=1)
+    # Buy ratio factor beyond +30% disparity (0 = stop new TQQQ, the base rule;
+    # 1 = never decelerate). Lets research test "no deceleration at all".
+    daily_decel_stop: float = Field(default=0, ge=0, le=1)
+    # If > 0: cash left unspent by deceleration is tracked as a carried
+    # reserve and redeployed at 1/N per day once disparity returns below +10%
+    # (0 = off, the base rule: the reserve waits for a defense-recovery cycle).
+    reserve_redeploy_days: int = Field(default=0, ge=0, le=126)
+    # If > 0: on a day the disparity falls >= 3%p while still above the MA
+    # (a sharp dip, e.g. +15% -> +8%), buy an EXTRA multiple of the daily
+    # budget from cash. 0 = off (base rule).
+    dip_buy_multiple: float = Field(default=0, ge=0, le=10)
+    # Batch-buy cadence (whole-share constraint modeling): each day's buy is
+    # earmarked at that day's deceleration ratio, but executed only every N
+    # trading days. 1 = daily (idealized fractional buying).
+    tqqq_batch_days: int = Field(default=1, ge=1, le=63)
+    one_x_batch_days: int = Field(default=1, ge=1, le=63)
+    # Salary-day mode: the monthly contribution arrives as a lump on the
+    # month's first trading day and the month's 1x allocation is bought
+    # upfront that day (TQQQ keeps its daily decelerated cadence).
+    one_x_upfront_monthly: bool = False
+    ma_exit_band_pct: float = Field(default=0, ge=-5, le=5)
+    overheat_trim_distance_pct: float = Field(default=25, ge=10, le=50)
+    # None keeps each strategy's historical default: staged -> cash,
+    # daily accumulation -> hold_one_x.
+    defense_mode: DefenseMode | None = None
 
 
 class EquityPoint(BaseModel):
@@ -102,3 +138,4 @@ class BacktestRunResponse(BaseModel):
     trades: list[TradeLogItem]
     projection: list[ProjectionScenario]
     interpretation: list[str]
+    data_notes: list[str] = []

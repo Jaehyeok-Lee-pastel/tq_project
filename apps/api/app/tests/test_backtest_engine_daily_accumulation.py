@@ -1,5 +1,11 @@
 from app.schemas.backtest import BacktestRunRequest
-from app.services.backtest_engine import BacktestFrame, calculate_metrics, calculate_regime_performance, simulate_buy_hold, simulate_strategy
+from app.services.backtest_engine import (
+    BacktestFrame,
+    calculate_metrics,
+    calculate_regime_performance,
+    simulate_buy_hold,
+    simulate_strategy,
+)
 
 
 def frame(day: int, qqq: float, tqqq: float, sma200: float = 100) -> BacktestFrame:
@@ -8,6 +14,7 @@ def frame(day: int, qqq: float, tqqq: float, sma200: float = 100) -> BacktestFra
         qqq=qqq,
         tqqq=tqqq,
         qld=tqqq * 0.8,
+        spy=qqq,
         sma200=sma200,
         sma20=qqq,
         sma50=qqq,
@@ -68,7 +75,8 @@ def test_daily_accumulation_uses_existing_holdings_as_starting_state():
         ),
     )
 
-    assert curve[0].equity > 2_500_000
+    assert curve[0].equity == 2_500_000  # day-0 anchor equals starting holdings
+    assert curve[-1].equity > 2_500_000
     assert any(trade.symbol == "TQQQ" and trade.ratio == 70.0 for trade in trades)
     assert any(trade.symbol == "QQQM" and trade.ratio == 30.0 for trade in trades)
 
@@ -90,8 +98,9 @@ def test_buy_hold_strategies_receive_monthly_contributions_for_fair_comparison()
     )
 
     assert with_contribution[-1].equity > without_contribution[-1].equity
-    assert trades
-    assert all(trade.symbol == "QQQ" for trade in trades)
+    # Contributions are cash flows, not strategy trades: no trade-log spam.
+    assert not trades
+    assert all(point.cash_flow > 0 for point in with_contribution[1:])
 
 
 def test_tqqq_buy_hold_receives_monthly_contributions_into_tqqq():
@@ -101,7 +110,7 @@ def test_tqqq_buy_hold_receives_monthly_contributions_into_tqqq():
         frame(3, 102, 106),
     ]
 
-    _, trades = simulate_strategy(
+    curve, trades = simulate_strategy(
         frames,
         BacktestRunRequest(
             strategy="tqqq_buy_hold",
@@ -111,9 +120,9 @@ def test_tqqq_buy_hold_receives_monthly_contributions_into_tqqq():
         ),
     )
 
-    assert trades
-    assert all(trade.symbol == "TQQQ" for trade in trades)
-    assert all(trade.ratio == 100 for trade in trades)
+    assert not trades
+    assert all(point.position == "TQQQ" for point in curve)
+    assert all(point.cash_flow > 0 for point in curve[1:])
 
 
 def test_staged_200ma_receives_monthly_contributions_under_current_stage_rules():

@@ -17,6 +17,7 @@ build/
 
 # Local/private app data
 apps/api/data/*.json
+apps/api/data/market_cache/
 
 # Local agent/runtime workdirs
 .claude/

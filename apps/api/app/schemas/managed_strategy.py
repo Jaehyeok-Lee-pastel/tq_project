@@ -2,6 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.backtest import BacktestStrategy, DefenseMode
 from app.schemas.strategy import MarketSnapshot, StrategyPlan
 
 ManagedStrategyStatus = Literal["active", "paused", "archived"]
@@ -22,11 +23,94 @@ ExecutionSide = Literal["buy", "sell"]
 ExecutionStatus = Literal["ready", "wait", "blocked", "done"]
 
 
+class ResearchStrategyConfig(BaseModel):
+    """The exact rule set validated in the research lab (ComparePage).
+
+    Stored verbatim on the managed strategy so the daily decision endpoint
+    and the simulation tab run the SAME rules the backtest validated.
+    """
+
+    strategy: BacktestStrategy = "tqqq_daily_200ma"
+    daily_base_tqqq_ratio: float = Field(default=70, ge=0, le=100)
+    daily_base_one_x_ratio: float = Field(default=30, ge=0, le=100)
+    one_x_symbol: str = "QQQM"
+    ma_exit_band_pct: float = Field(default=2, ge=-5, le=5)
+    defense_mode: DefenseMode = "cash"
+    monthly_contribution: float = Field(default=0, ge=0, le=20_000_000)
+    moving_average_days: int = Field(default=200, ge=50, le=300)
+    tqqq_target_ratio: float = Field(default=45, ge=0, le=100)
+    qld_target_ratio: float = Field(default=60, ge=0, le=100)
+    # Buy the month's 1x allocation as a lump on payday (fractional order in
+    # the Toss app); TQQQ keeps the daily decelerated cadence. Validated in
+    # research study 20.
+    one_x_upfront_monthly: bool = False
+
+
+class AdoptResearchRequest(BaseModel):
+    research_config: ResearchStrategyConfig
+    market: MarketSnapshot
+    tqqq_value: float = Field(default=0, ge=0)
+    one_x_value: float = Field(default=0, ge=0)
+    cash_value: float = Field(default=0, ge=0)
+    selected_reason: str = ""
+    source_total_score: int | None = None
+    source_cagr: float | None = None
+    source_max_drawdown: float | None = None
+
+
+TodayRegime = Literal["above", "below_unconfirmed", "defense"]
+TodayAction = Literal[
+    "accumulate",
+    "accumulate_decelerated",
+    "stop_new_tqqq",
+    "hold_below_unconfirmed",
+    "defense_sell",
+    "hold_defense",
+]
+
+
+class TodayDecision(BaseModel):
+    as_of: str
+    data_age_days: int
+    qqq_close: float
+    qqq_sma200: float
+    distance_pct: float
+    exit_line: float
+    regime: TodayRegime
+    below_ma_days: int
+    tier: int
+    tier_label: str
+    action: TodayAction
+    headline: str
+    instructions: list[str]
+    daily_budget: float
+    tqqq_buy_amount: float
+    one_x_buy_amount: float
+    tqqq_buy_ratio_pct: float
+    one_x_buy_ratio_pct: float
+    redeploy_active: bool
+    redeploy_day: int
+    defense_mode: DefenseMode
+    checklist: list[str]
+
+
+class DepositRequest(BaseModel):
+    """A salary-day cash deposit into the strategy (research strategies).
+
+    The rules decide how the money deploys (daily split, deceleration); the
+    deposit only grows the cash sleeve and leaves an auditable record.
+    """
+
+    amount: float = Field(gt=0, le=100_000_000)
+    note: str = ""
+
+
 class ManagedStrategyCreate(BaseModel):
     plan: StrategyPlan
     market: MarketSnapshot
     total_capital: float = Field(ge=0)
     selected_reason: str = ""
+    research_config: ResearchStrategyConfig | None = None
 
 
 class ManagedStrategyUpdate(BaseModel):

@@ -6,7 +6,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "app-api"
     app_env: str = "local"
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    cors_origins: str = (
+        "http://localhost:4173,http://127.0.0.1:4173,"
+        "http://localhost:5173,http://127.0.0.1:5173"
+    )
 
     # Supabase service role is backend-only (bypasses RLS).
     supabase_url: str = ""

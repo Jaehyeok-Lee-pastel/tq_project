@@ -2,12 +2,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.schemas.backtest import BacktestRunResponse, BacktestStrategy
+from app.schemas.backtest import BacktestRunResponse, BacktestStrategy, DefenseMode
 
 
 class StrategyCompareRequest(BaseModel):
     initial_capital: float = Field(default=2_500_000, gt=0)
     risk_score: int = Field(default=75, ge=0, le=100)
+    start_date: str | None = None
+    end_date: str | None = None
     strategies: list[BacktestStrategy] = Field(
         default_factory=lambda: [
             "tqqq_200ma",
@@ -34,6 +36,10 @@ class StrategyCompareRequest(BaseModel):
     initial_tqqq_value: float = Field(default=0, ge=0, le=1_000_000_000)
     initial_one_x_value: float = Field(default=0, ge=0, le=1_000_000_000)
     initial_cash_value: float = Field(default=0, ge=0, le=1_000_000_000)
+    ma_exit_band_pct: float = Field(default=0, ge=-5, le=5)
+    defense_mode: DefenseMode | None = None
+    reserve_redeploy_days: int = Field(default=0, ge=0, le=126)
+    one_x_upfront_monthly: bool = False
 
 
 class StrategyRankItem(BaseModel):
@@ -50,6 +56,8 @@ class StrategyRankItem(BaseModel):
     defense_score: int
     fit_score: int
     consistency_score: int
+    execution_score: int
+    decisions_per_year: float
     total_score: int
     verdict: Literal["best_fit", "high_return", "defensive", "too_risky", "watch"]
     reason: str
@@ -70,6 +78,26 @@ class SensitivitySummary(BaseModel):
     robustness_score: int
     verdict: str
     results: list[SensitivityItem]
+
+
+class RuleVariationItem(BaseModel):
+    label: str
+    cagr: float
+    max_drawdown: float
+    total_score: int
+
+
+class RuleRobustnessSummary(BaseModel):
+    strategy: BacktestStrategy
+    strategy_name: str
+    baseline_cagr: float
+    baseline_max_drawdown: float
+    cagr_range: float
+    mdd_range: float
+    robustness_score: int
+    verdict: str
+    note: str
+    results: list[RuleVariationItem]
 
 
 class PhilosophyAuditItem(BaseModel):
@@ -111,5 +139,6 @@ class StrategyCompareResponse(BaseModel):
     summary: str
     rankings: list[StrategyRankItem]
     sensitivity: SensitivitySummary | None = None
+    rule_robustness: RuleRobustnessSummary | None = None
     tqqq_default_comparison: TqqqDefaultComparison | None = None
     backtests: list[BacktestRunResponse]

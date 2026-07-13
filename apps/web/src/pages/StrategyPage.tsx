@@ -90,7 +90,7 @@ type StrategyResponse = {
 };
 type CandidateAsset = { symbol: string; name: string; category: string; role: string };
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+import { API_BASE_URL as apiBaseUrl } from "../lib/api";
 const candidateAssets: CandidateAsset[] = [
   { symbol: "TQQQ", name: "ProShares UltraPro QQQ", category: "nasdaq_leverage", role: "공격 엔진" },
   { symbol: "QLD", name: "ProShares Ultra QQQ", category: "nasdaq_leverage", role: "완충형 레버리지" },

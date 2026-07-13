@@ -4,7 +4,7 @@ import { BookOpenCheck, ClipboardCheck, FlaskConical, History, ListChecks, Refre
 import { useAuth } from "../app/AuthContext";
 import { supabase } from "../lib/supabase";
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+import { API_BASE_URL as apiBaseUrl } from "../lib/api";
 const userSettingsKey = "tqcoach.userSettings";
 const AUTO_MARKET_REFRESH_MS = 30 * 60 * 1000;
 
@@ -25,6 +25,47 @@ type ExecutionStep = {
   reason: string;
   action_label: string;
 };
+type ResearchConfig = {
+  strategy: "qqq_buy_hold" | "tqqq_buy_hold" | "tqqq_200ma" | "qld_200ma" | "tqqq_daily_200ma";
+  daily_base_tqqq_ratio: number;
+  daily_base_one_x_ratio: number;
+  one_x_symbol: string;
+  ma_exit_band_pct: number;
+  defense_mode: "cash" | "spym_sgov_half" | "hold_one_x";
+  monthly_contribution: number;
+  moving_average_days: number;
+  one_x_upfront_monthly?: boolean;
+};
+type TodayDecision = {
+  as_of: string;
+  data_age_days: number;
+  qqq_close: number;
+  qqq_sma200: number;
+  distance_pct: number;
+  exit_line: number;
+  regime: "above" | "below_unconfirmed" | "defense";
+  below_ma_days: number;
+  tier: number;
+  tier_label: string;
+  action:
+    | "accumulate"
+    | "accumulate_decelerated"
+    | "stop_new_tqqq"
+    | "hold_below_unconfirmed"
+    | "defense_sell"
+    | "hold_defense";
+  headline: string;
+  instructions: string[];
+  daily_budget: number;
+  tqqq_buy_amount: number;
+  one_x_buy_amount: number;
+  tqqq_buy_ratio_pct: number;
+  one_x_buy_ratio_pct: number;
+  redeploy_active: boolean;
+  redeploy_day: number;
+  defense_mode: "cash" | "spym_sgov_half" | "hold_one_x";
+  checklist: string[];
+};
 type ManagedStrategy = {
   id: string;
   status: "active" | "paused" | "archived";
@@ -33,6 +74,7 @@ type ManagedStrategy = {
   version: number;
   selected_reason: string;
   total_capital: number;
+  research_config?: ResearchConfig | null;
   market: {
     qqq_close: number;
     qqq_sma200: number;
@@ -444,6 +486,12 @@ export function ManagementPage() {
   const [marketStatus, setMarketStatus] = useState("QQQ 시장 지표는 저장된 스냅샷 기준입니다.");
   const [status, setStatus] = useState("채택한 전략을 불러오는 중입니다.");
   const [activeTab, setActiveTab] = useState<ManageTab>("overview");
+  const [todayDecision, setTodayDecision] = useState<TodayDecision | null>(null);
+  const [todayStatus, setTodayStatus] = useState("");
+  const [depositAmount, setDepositAmount] = useState(0);
+  const [depositNote, setDepositNote] = useState("");
+  const [depositing, setDepositing] = useState(false);
+  const [parkingSgov, setParkingSgov] = useState(false);
   const marketRefreshInFlight = useRef(false);
   const [draft, setDraft] = useState({
     entry_type: "note" as JournalEntry["entry_type"],
@@ -460,6 +508,24 @@ export function ManagementPage() {
     () => guide?.strategy ?? strategies.find((strategy) => strategy.id === selectedId) ?? strategies[0],
     [guide, selectedId, strategies],
   );
+  const todayAlreadyLogged = useMemo(() => {
+    if (!selected || !todayDecision) return false;
+    const marker = `오늘의 판단 자동 기록 (${todayDecision.as_of})`;
+    return selected.journal.some((entry) => entry.note?.includes(marker));
+  }, [selected, todayDecision]);
+  const monthExecution = useMemo(() => {
+    if (!selected?.research_config) return null;
+    const now = new Date();
+    const prefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    let bought = 0;
+    const days = new Set<string>();
+    selected.journal.forEach((entry) => {
+      if (entry.entry_type !== "buy" || !entry.created_at.startsWith(prefix)) return;
+      bought += entry.amount || 0;
+      days.add(entry.created_at.slice(0, 10));
+    });
+    return { bought, days: days.size, budget: selected.research_config.monthly_contribution };
+  }, [selected]);
   const manualCashKrw = manualCashUsd > 0 ? manualCashUsd * usdKrwRate : null;
 
   useEffect(() => {
@@ -562,8 +628,20 @@ export function ManagementPage() {
     const pendingSplitAmount = guide?.execution_plan
       .filter((step) => step.side === "buy" && step.status !== "done")
       .reduce((sum, step) => sum + step.amount, 0) ?? 0;
-    const minimumCashBuffer = Math.max(pendingSplitAmount, selected.total_capital * 0.1);
-    const suggestedSgovAmount = Math.max(idleCash - minimumCashBuffer, 0);
+    const isResearch = Boolean(selected.research_config);
+    // Research strategies: keep exactly one month of buy budget liquid and
+    // park only the excess. In defense regime everything may park in SGOV —
+    // that IS the defensive posture (sold back via the 21-day redeploy).
+    const minimumCashBuffer = isResearch
+      ? todayDecision?.regime === "defense"
+        ? 0
+        : selected.research_config?.monthly_contribution ?? 0
+      : Math.max(pendingSplitAmount, selected.total_capital * 0.1);
+    let suggestedSgovAmount = Math.max(idleCash - minimumCashBuffer, 0);
+    if (isResearch && suggestedSgovAmount < 100_000) {
+      // Avoid churning SGOV with micro transfers.
+      suggestedSgovAmount = 0;
+    }
     const cashReserveRatio = selected.total_capital > 0 ? ((idleCash + cashLikeValue) / selected.total_capital) * 100 : 0;
     return {
       spentAmount,
@@ -576,7 +654,7 @@ export function ManagementPage() {
       cashReserveRatio,
       autoIdleCash,
     };
-  }, [guide, liveQuotes, manualCashKrw, selected, usdKrwRate]);
+  }, [guide, liveQuotes, manualCashKrw, selected, todayDecision, usdKrwRate]);
 
   const cashLedger = useMemo(() => {
     if (!selected) {
@@ -773,6 +851,14 @@ export function ManagementPage() {
   }, [selectedId]);
 
   useEffect(() => {
+    if (selected?.research_config?.strategy === "tqqq_daily_200ma") {
+      void loadTodayDecision(selected.id);
+    } else {
+      setTodayDecision(null);
+    }
+  }, [selected?.id, selected?.research_config?.strategy]);
+
+  useEffect(() => {
     if (selected) void loadLiveQuotes(selected);
   }, [selected?.id, usdKrwRate]);
 
@@ -793,6 +879,106 @@ export function ManagementPage() {
       setStatus(next.length ? "채택한 전략을 불러왔습니다." : "아직 채택한 전략이 없습니다. 전략 수립 화면에서 먼저 채택하세요.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "전략 목록을 불러오지 못했습니다.");
+    }
+  }
+
+  async function submitDeposit() {
+    if (!selected) return;
+    const amount = depositAmount > 0 ? depositAmount : selected.research_config?.monthly_contribution ?? 0;
+    if (amount <= 0) {
+      setStatus("입금액을 입력하세요.");
+      return;
+    }
+    setDepositing(true);
+    try {
+      const updated = await fetchJson<ManagedStrategy>(`/managed-strategies/${selected.id}/deposit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount, note: depositNote || `월급일(매월 ${payDay}일) 정기 입금` }),
+      });
+      setStrategies((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setGuide((current) => (current ? { ...current, strategy: updated } : current));
+      setDepositNote("");
+      setStatus(
+        `${formatKrw(amount)} 입금을 반영했습니다. 총자본 ${formatKrw(updated.total_capital)} — 규칙에 따라 하루 ${formatKrw(amount / 21)}씩 분할 집행됩니다.`,
+      );
+    } catch (error) {
+      setStatus(error instanceof Error ? `입금 반영 실패: ${error.message}` : "입금 반영 실패");
+    } finally {
+      setDepositing(false);
+    }
+  }
+
+  async function removeStrategy(strategy: ManagedStrategy) {
+    const confirmed = window.confirm(
+      `'${strategy.plan.title}' 전략을 삭제할까요?\n실행 기록(저널 ${strategy.journal.length}건)과 버전 이력이 함께 삭제되며 되돌릴 수 없습니다.`,
+    );
+    if (!confirmed) return;
+    try {
+      const remaining = await fetchJson<ManagedStrategy[]>(`/managed-strategies/${strategy.id}`, {
+        method: "DELETE",
+      });
+      setStrategies(remaining);
+      setSelectedId(remaining[0]?.id ?? "");
+      setGuide(null);
+      setTodayDecision(null);
+      setStatus(remaining.length ? "전략을 삭제했습니다." : "전략을 삭제했습니다. 남은 전략이 없습니다.");
+    } catch (error) {
+      setStatus(error instanceof Error ? `전략 삭제 실패: ${error.message}` : "전략 삭제 실패");
+    }
+  }
+
+  async function loadTodayDecision(id: string) {
+    setTodayStatus("오늘 판단을 계산하는 중입니다...");
+    try {
+      const next = await fetchJson<TodayDecision>(`/managed-strategies/${id}/today`);
+      setTodayDecision(next);
+      setTodayStatus(`기준일 ${next.as_of}${next.data_age_days > 1 ? ` (데이터 ${next.data_age_days}일 경과 — 최신 여부 확인)` : ""}`);
+    } catch (error) {
+      setTodayDecision(null);
+      setTodayStatus(error instanceof Error ? `오늘 판단 계산 실패: ${error.message}` : "오늘 판단 계산 실패");
+    }
+  }
+
+  async function logTodayDecision() {
+    if (!selected || !todayDecision || todayAlreadyLogged) return;
+    const decision = todayDecision;
+    const entries: { entry_type: JournalEntry["entry_type"]; symbol: string; amount: number; reason: string }[] = [];
+    const oneX = selected.research_config?.one_x_symbol ?? "QQQM";
+    if (decision.action === "accumulate" || decision.action === "accumulate_decelerated" || decision.action === "stop_new_tqqq") {
+      if (decision.tqqq_buy_amount > 0) {
+        entries.push({ entry_type: "buy", symbol: "TQQQ", amount: decision.tqqq_buy_amount, reason: decision.headline });
+      }
+      if (decision.one_x_buy_amount > 0) {
+        entries.push({ entry_type: "buy", symbol: oneX, amount: decision.one_x_buy_amount, reason: decision.headline });
+      }
+      if (!entries.length) {
+        entries.push({ entry_type: "hold", symbol: "CASH", amount: 0, reason: decision.headline });
+      }
+    } else if (decision.action === "defense_sell") {
+      entries.push({ entry_type: "sell", symbol: "TQQQ", amount: 0, reason: `${decision.headline} — 전량 매도` });
+      if (decision.defense_mode !== "hold_one_x") {
+        entries.push({ entry_type: "sell", symbol: oneX, amount: 0, reason: `${decision.headline} — 방어 모드에 따라 함께 매도` });
+      }
+      if (decision.defense_mode === "spym_sgov_half") {
+        entries.push({ entry_type: "buy", symbol: "SPYM", amount: 0, reason: "방어 자금의 50% SPYM 배치" });
+      }
+    } else {
+      entries.push({ entry_type: "hold", symbol: "CASH", amount: 0, reason: `${decision.headline} — ${decision.instructions[0] ?? ""}` });
+    }
+    try {
+      for (const entry of entries) {
+        await fetchJson<ManagedStrategy>(`/managed-strategies/${selected.id}/journal`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...entry, quantity: 0, price: 0, mood: "calm", note: `오늘의 판단 자동 기록 (${decision.as_of})` }),
+        });
+      }
+      setStatus(`오늘의 판단을 실행 기록에 남겼습니다 (${entries.length}건).`);
+      await loadStrategies();
+      if (selected.id) await loadGuide(selected.id);
+    } catch (error) {
+      setStatus(error instanceof Error ? `기록 실패: ${error.message}` : "기록 실패");
     }
   }
 
@@ -1070,6 +1256,39 @@ export function ManagementPage() {
     setStatus("SGOV 대기자금 기록 초안을 만들었습니다. 실제 주문 후 체결가와 수량을 확인하고 저장하세요.");
   }
 
+  async function parkSgovNow() {
+    if (!selected || cashStatus.suggestedSgovAmount < 10000 || parkingSgov) return;
+    const amount = Math.round(cashStatus.suggestedSgovAmount);
+    const quote = liveQuotes.SGOV;
+    const quantity = quote && usdKrwRate ? Number((amount / (quote.price * usdKrwRate)).toFixed(4)) : 0;
+    setParkingSgov(true);
+    try {
+      const updated = await fetchJson<ManagedStrategy>(`/managed-strategies/${selected.id}/journal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entry_type: "buy",
+          symbol: "SGOV",
+          amount,
+          quantity,
+          price: quote?.price ?? 0,
+          reason: selected.research_config
+            ? "감속 이월분 SGOV 파킹 — 이번 달 매수 예산 초과 현금"
+            : "분할매수 대기 현금 SGOV 운용",
+          mood: "calm",
+          note: `SGOV 파킹 원클릭 기록 (${new Date().toISOString().slice(0, 10)}). 실제 주문 체결가·수량과 다르면 실행 기록에서 수정하세요.`,
+        }),
+      });
+      setStrategies((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setGuide((current) => (current ? { ...current, strategy: updated } : current));
+      setStatus(`${formatKrw(amount)}을 SGOV 파킹으로 기록했습니다. 실제 매수 주문을 함께 실행하세요.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? `SGOV 파킹 기록 실패: ${error.message}` : "SGOV 파킹 기록 실패");
+    } finally {
+      setParkingSgov(false);
+    }
+  }
+
   async function addJournal() {
     if (!selected) return;
     try {
@@ -1180,6 +1399,10 @@ export function ManagementPage() {
                       <FlaskConical size={16} />
                       이 전략으로 테스트
                     </button>
+                    <button className="danger-button" type="button" onClick={() => void removeStrategy(selected)}>
+                      <Trash2 size={16} />
+                      전략 삭제
+                    </button>
                   </div>
                   <small className="fx-status">
                     {marketStatus} · 저장 기준 {selected.market.as_of} · QQQ {formatUsd(selected.market.qqq_close)}
@@ -1229,6 +1452,92 @@ export function ManagementPage() {
                 </button>
               ))}
             </div>
+          </article>
+        ) : null}
+
+        {activeTab === "overview" && selected?.research_config?.strategy === "tqqq_daily_200ma" ? (
+          <article className={`panel span-12 today-decision ${todayDecision?.regime ?? "loading"}`}>
+            <div className="report-head">
+              <div>
+                <span className="section-label">Today Decision · 연구 규칙 기준</span>
+                <h2 className="panel-title">
+                  <ClipboardCheck size={18} />
+                  {todayDecision ? todayDecision.headline : "오늘 판단 계산 중"}
+                </h2>
+                <p>{todayStatus}</p>
+              </div>
+              <div className="hero-actions">
+                <button type="button" onClick={() => selected && loadTodayDecision(selected.id)}>
+                  <RefreshCw size={15} /> 다시 계산
+                </button>
+                {todayDecision ? (
+                  <button
+                    className="primary"
+                    type="button"
+                    disabled={todayAlreadyLogged}
+                    onClick={() => void logTodayDecision()}
+                  >
+                    <Save size={15} /> {todayAlreadyLogged ? "오늘 기록 완료" : "오늘 지시 기록하기"}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {todayDecision ? (
+              <>
+                <div className="cash-metrics">
+                  <span>
+                    <small>QQQ vs {selected.research_config.moving_average_days}일선</small>
+                    <strong>{todayDecision.distance_pct >= 0 ? "+" : ""}{todayDecision.distance_pct.toFixed(2)}%</strong>
+                  </span>
+                  <span>
+                    <small>국면</small>
+                    <strong>
+                      {todayDecision.regime === "above"
+                        ? "기준선 위"
+                        : todayDecision.regime === "below_unconfirmed"
+                          ? "이탈 1일차"
+                          : `방어 (이탈 ${todayDecision.below_ma_days}일차)`}
+                    </strong>
+                  </span>
+                  <span><small>감속 구간</small><strong>{todayDecision.tier_label}</strong></span>
+                  <span>
+                    <small>오늘 적립</small>
+                    <strong>
+                      {todayDecision.daily_budget > 0 && todayDecision.regime === "above"
+                        ? `TQQQ ${formatKrw(todayDecision.tqqq_buy_amount)} + ${selected.research_config.one_x_symbol} ${formatKrw(todayDecision.one_x_buy_amount)}`
+                        : "현금 대기"}
+                    </strong>
+                  </span>
+                </div>
+                {monthExecution ? (
+                  <p className="muted">
+                    이번 달 집행: {formatKrw(monthExecution.bought)} / 예산 {formatKrw(monthExecution.budget)}
+                    {" "}({monthExecution.days}일 기록{monthExecution.budget > 0 ? ` · ${Math.round((monthExecution.bought / monthExecution.budget) * 100)}%` : ""})
+                  </p>
+                ) : null}
+                {todayDecision.daily_budget > 0 && todayDecision.regime === "above" && usdKrwRate > 0 ? (
+                  <p className="muted">
+                    달러 환산 (환율 {usdKrwRate.toLocaleString("ko-KR")}원 기준): TQQQ{" "}
+                    {formatUsdFromKrw(todayDecision.tqqq_buy_amount, usdKrwRate)} + {selected.research_config.one_x_symbol}{" "}
+                    {formatUsdFromKrw(todayDecision.one_x_buy_amount, usdKrwRate)}
+                    {todayDecision.daily_budget - todayDecision.tqqq_buy_amount - todayDecision.one_x_buy_amount > 1
+                      ? ` · 현금 대기 ${formatUsdFromKrw(todayDecision.daily_budget - todayDecision.tqqq_buy_amount - todayDecision.one_x_buy_amount, usdKrwRate)}`
+                      : ""}
+                  </p>
+                ) : null}
+                <ul className="today-instructions">
+                  {todayDecision.instructions.map((instruction) => (
+                    <li key={instruction}>{instruction}</li>
+                  ))}
+                </ul>
+                {todayDecision.redeploy_active ? (
+                  <p className="muted">방어 현금 재투입 진행 중: {todayDecision.redeploy_day}/21일차</p>
+                ) : null}
+                {todayAlreadyLogged ? (
+                  <p className="muted">✓ 오늘({todayDecision.as_of}) 지시는 이미 실행 기록에 저장되어 있습니다.</p>
+                ) : null}
+              </>
+            ) : null}
           </article>
         ) : null}
 
@@ -1304,8 +1613,12 @@ export function ManagementPage() {
               <div className="cash-metrics">
                 <span><small>미사용 현금</small><strong>{formatKrw(cashStatus.idleCash)}</strong></span>
                 <span><small>현금성 ETF</small><strong>{formatKrw(cashStatus.cashLikeValue)}</strong></span>
-                <span><small>남은 분할매수</small><strong>{formatKrw(cashStatus.pendingSplitAmount)}</strong></span>
-                <span><small>SGOV 추천</small><strong>{formatKrw(cashStatus.suggestedSgovAmount)}</strong></span>
+                {selected?.research_config ? (
+                  <span><small>현금 유지 기준 (이번 달 매수 예산)</small><strong>{formatKrw(cashStatus.minimumCashBuffer)}</strong></span>
+                ) : (
+                  <span><small>남은 분할매수</small><strong>{formatKrw(cashStatus.pendingSplitAmount)}</strong></span>
+                )}
+                <span><small>SGOV 추천</small><strong>{cashStatus.suggestedSgovAmount > 0 ? formatKrw(cashStatus.suggestedSgovAmount) : "이동 불필요"}</strong></span>
               </div>
               <div className="cash-actions">
                 <label>
@@ -1322,13 +1635,32 @@ export function ManagementPage() {
                   입력하지 않으면 기록 기준 자동 현금 {formatKrw(cashStatus.autoIdleCash)}을 사용합니다.
                   입력 시 {formatUsdFromKrw(cashStatus.idleCash, usdKrwRate)} 기준으로 CASH 행에 반영됩니다.
                 </small>
-                <p>
-                  남은 분할매수 예정액과 최소 현금 버퍼를 제외하고 여유가 있는 현금만 SGOV 대기 후보로 계산합니다.
-                  매수 조건이 오면 SGOV를 매도해 TQQQ/QLD 분할매수 재원으로 쓰는 전제입니다.
-                </p>
-                <button type="button" onClick={prepareSgovParking} disabled={cashStatus.suggestedSgovAmount < 10000}>
-                  SGOV 대기 기록 초안
-                </button>
+                {selected?.research_config ? (
+                  <p>
+                    이번 달 매수 예산({formatKrw(selected.research_config.monthly_contribution)})은 현금으로 남기고,
+                    그 초과분(감속 이월분)만 SGOV 대기 후보로 계산합니다. 10만원 미만이면 잦은 매매를 피하기 위해
+                    이동을 권하지 않고, 200일선 이탈 방어 국면에서는 전액 SGOV 파킹이 곧 방어 포지션입니다.
+                    SGOV 매도는 방어 후 회복 시 21일 재투입 때만 발생하는 전제입니다.
+                  </p>
+                ) : (
+                  <p>
+                    남은 분할매수 예정액과 최소 현금 버퍼를 제외하고 여유가 있는 현금만 SGOV 대기 후보로 계산합니다.
+                    매수 조건이 오면 SGOV를 매도해 TQQQ/QLD 분할매수 재원으로 쓰는 전제입니다.
+                  </p>
+                )}
+                <div className="hero-actions">
+                  <button
+                    className="primary"
+                    type="button"
+                    onClick={() => void parkSgovNow()}
+                    disabled={cashStatus.suggestedSgovAmount < 10000 || parkingSgov}
+                  >
+                    {parkingSgov ? "기록 중..." : "SGOV 파킹 기록하기"}
+                  </button>
+                  <button type="button" onClick={prepareSgovParking} disabled={cashStatus.suggestedSgovAmount < 10000}>
+                    수정해서 기록
+                  </button>
+                </div>
               </div>
             </div>
             <div className="risk-budget-card">
@@ -1371,7 +1703,7 @@ export function ManagementPage() {
           </article>
         ) : null}
 
-        {activeTab === "overview" && guide && selected ? (
+        {activeTab === "overview" && guide && selected && guide.execution_plan.length > 0 ? (
           <article className="panel span-12">
             <PanelTitle icon={<Target size={18} />} title="오늘 실행 기준" />
             <div className="execution-grid">
@@ -1398,7 +1730,89 @@ export function ManagementPage() {
           </article>
         ) : null}
 
-        {activeTab === "strategy" && selected ? (
+        {activeTab === "strategy" && selected?.research_config ? (
+          <article className="panel span-12">
+            <PanelTitle icon={<BookOpenCheck size={18} />} title="연구 규칙 (백테스트로 검증된 원본)" />
+            <p className="muted">
+              개인연구에서 채택한 규칙 그대로입니다. 오늘의 판단이 이 규칙으로 계산되며, 규칙 변경은
+              개인연구 탭에서 재검증 후 재채택하는 것이 원칙입니다.
+            </p>
+            <div className="cash-metrics">
+              <span><small>적립 비율</small><strong>TQQQ {selected.research_config.daily_base_tqqq_ratio}% : {selected.research_config.one_x_symbol} {selected.research_config.daily_base_one_x_ratio}%</strong></span>
+              <span>
+                <small>{selected.research_config.one_x_symbol} 매수 방식</small>
+                <strong>
+                  {selected.research_config.one_x_upfront_monthly
+                    ? "월급날 소수점 일괄 매수"
+                    : "매일 분할 매수"}
+                </strong>
+              </span>
+              <span><small>월 적립금</small><strong>{formatKrw(selected.research_config.monthly_contribution)} (일 {formatKrw(selected.research_config.monthly_contribution / 21)})</strong></span>
+              <span><small>기준선</small><strong>{selected.research_config.moving_average_days}일선 {selected.research_config.ma_exit_band_pct >= 0 ? "+" : ""}{selected.research_config.ma_exit_band_pct}%</strong></span>
+              <span>
+                <small>이탈 시 방어</small>
+                <strong>
+                  {selected.research_config.defense_mode === "cash"
+                    ? "전량 매도 → 현금/SGOV"
+                    : selected.research_config.defense_mode === "spym_sgov_half"
+                      ? "전량 매도 → SPYM+SGOV 반반"
+                      : "TQQQ만 매도, 1x 유지"}
+                </strong>
+              </span>
+            </div>
+          </article>
+        ) : null}
+
+        {activeTab === "strategy" && selected?.research_config ? (
+          <article className="panel span-12 adjustment-coach">
+            <PanelTitle icon={<Save size={18} />} title="월급 추가금 입금" />
+            <div className="adjustment-form">
+              <div>
+                <span className="section-label">Salary Deposit</span>
+                <h3>매월 {payDay}일 월급이 들어오면 여기서 입금을 기록하세요.</h3>
+                <p className="muted">
+                  입금액은 전략 현금(총자본)에 즉시 반영되고, 사용처는 규칙이 결정합니다 — 200일선 위에서는
+                  하루 1/21씩 분할 매수, 이격 과열 구간에서는 감속, 이탈 시에는 방어 실탄으로 대기합니다.
+                  별도의 배분 조언은 필요 없습니다.
+                </p>
+                {selected.research_config.one_x_upfront_monthly ? (
+                  <p className="muted">
+                    ✦ 선매수 모드: 입금 기록 후 {selected.research_config.one_x_symbol}{" "}
+                    {formatKrw((selected.research_config.monthly_contribution * selected.research_config.daily_base_one_x_ratio) / 100)}을
+                    토스 앱의 금액(소수점) 주문으로 오늘 일괄 매수하세요. TQQQ는 오늘의 판단대로 매일 삽니다.
+                  </p>
+                ) : null}
+              </div>
+              <div className="cash-actions">
+                <label>
+                  입금액 (기본: 월 적립 설정액)
+                  <input
+                    type="number"
+                    min={0}
+                    step={100000}
+                    value={depositAmount || ""}
+                    placeholder={`${selected.research_config.monthly_contribution.toLocaleString("ko-KR")}`}
+                    onChange={(event) => setDepositAmount(Number(event.target.value))}
+                  />
+                </label>
+                <label>
+                  메모 (선택)
+                  <input
+                    type="text"
+                    value={depositNote}
+                    placeholder="예: 7월 월급"
+                    onChange={(event) => setDepositNote(event.target.value)}
+                  />
+                </label>
+                <button className="primary" type="button" disabled={depositing} onClick={() => void submitDeposit()}>
+                  <Save size={15} /> {depositing ? "반영 중..." : "입금 기록하기"}
+                </button>
+              </div>
+            </div>
+          </article>
+        ) : null}
+
+        {activeTab === "strategy" && selected && !selected.research_config ? (
           <article className="panel span-12 adjustment-coach">
             <PanelTitle icon={<BookOpenCheck size={18} />} title="최신 철학 점검" />
             <div className="adjustment-form">
@@ -1447,7 +1861,7 @@ export function ManagementPage() {
           </article>
         ) : null}
 
-        {activeTab === "strategy" && selected ? (
+        {activeTab === "strategy" && selected && !selected.research_config ? (
           <article className="panel span-12 adjustment-coach">
             <PanelTitle icon={<SlidersHorizontal size={18} />} title="현금 비중 조정 코치" />
             <div className="adjustment-form">
@@ -1499,7 +1913,7 @@ export function ManagementPage() {
           </article>
         ) : null}
 
-        {activeTab === "strategy" && selected ? (
+        {activeTab === "strategy" && selected && !selected.research_config ? (
           <article className="panel span-12 adjustment-coach">
             <PanelTitle icon={<Save size={18} />} title="월급 추가금 코치" />
             <div className="adjustment-form">

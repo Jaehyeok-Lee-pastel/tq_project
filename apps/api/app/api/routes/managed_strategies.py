@@ -4,24 +4,30 @@ from fastapi import APIRouter, HTTPException, Query
 from app.api.deps import OptionalCurrentUserDep
 from app.repositories.managed_strategy_repository import (
     add_journal_entry,
+    advise_adjustment,
+    apply_deposit,
     advise_contribution,
     advise_philosophy_upgrade,
     apply_adjustment,
     apply_contribution,
     apply_philosophy_upgrade,
-    advise_adjustment,
     build_backtest_request_from_strategy,
     build_guide,
     create_strategy,
     delete_journal_entry,
+    delete_strategy,
     get_strategy,
     list_strategies,
     update_strategy,
 )
+from app.core.config import settings
+from app.schemas.backtest import BacktestRunResponse
 from app.schemas.managed_strategy import (
+    AdoptResearchRequest,
     ContributionPlanAdvice,
     ContributionPlanApplyRequest,
     ContributionPlanRequest,
+    DepositRequest,
     ManagedStrategy,
     ManagedStrategyCreate,
     ManagedStrategyGuide,
@@ -32,9 +38,12 @@ from app.schemas.managed_strategy import (
     StrategyAdjustmentApplyRequest,
     StrategyAdjustmentRequest,
     StrategyJournalCreate,
+    TodayDecision,
 )
-from app.schemas.backtest import BacktestRunResponse
 from app.services.backtest_engine import run_backtest
+from app.services.market_data import MarketDataError, fetch_provider_history
+from app.services.research_adoption import build_research_adoption
+from app.services.today_engine import compute_today_decision
 
 router = APIRouter(prefix="/managed-strategies", tags=["managed-strategies"])
 
@@ -49,6 +58,45 @@ async def post_managed_strategy(payload: ManagedStrategyCreate, current_user: Op
     return create_strategy(payload, current_user.user_id if current_user else None)
 
 
+@router.post("/adopt-research", response_model=ManagedStrategy)
+async def post_adopt_research(
+    payload: AdoptResearchRequest, current_user: OptionalCurrentUserDep
+) -> ManagedStrategy:
+    try:
+        create = build_research_adoption(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return create_strategy(create, current_user.user_id if current_user else None)
+
+
+@router.get("/{strategy_id}/today", response_model=TodayDecision)
+async def get_today_decision(
+    strategy_id: str, current_user: OptionalCurrentUserDep
+) -> TodayDecision:
+    try:
+        strategy = get_strategy(strategy_id, current_user.user_id if current_user else None)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Strategy not found") from exc
+    if strategy.research_config is None:
+        raise HTTPException(
+            status_code=400,
+            detail="이 전략에는 연구 규칙 설정이 없습니다. 개인연구 탭에서 전략을 채택하면 오늘 판단을 사용할 수 있습니다.",
+        )
+    if strategy.research_config.strategy != "tqqq_daily_200ma":
+        raise HTTPException(
+            status_code=400,
+            detail="이 전략은 분할 실행 카드로 관리됩니다. 오늘 판단 계산은 매일 적립 전략 전용입니다.",
+        )
+    try:
+        qqq_rows = await fetch_provider_history("QQQ", settings.market_data_provider.lower())
+    except (httpx.HTTPError, MarketDataError) as exc:
+        raise HTTPException(status_code=502, detail=f"Market data request failed: {exc}") from exc
+    try:
+        return compute_today_decision(strategy.research_config, qqq_rows)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/{strategy_id}", response_model=ManagedStrategy)
 async def get_managed_strategy(strategy_id: str, current_user: OptionalCurrentUserDep) -> ManagedStrategy:
     try:
@@ -57,10 +105,30 @@ async def get_managed_strategy(strategy_id: str, current_user: OptionalCurrentUs
         raise HTTPException(status_code=404, detail="Strategy not found") from exc
 
 
+@router.delete("/{strategy_id}", response_model=list[ManagedStrategy])
+async def delete_managed_strategy(
+    strategy_id: str, current_user: OptionalCurrentUserDep
+) -> list[ManagedStrategy]:
+    try:
+        return delete_strategy(strategy_id, current_user.user_id if current_user else None)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Strategy not found") from exc
+
+
 @router.patch("/{strategy_id}", response_model=ManagedStrategy)
 async def patch_managed_strategy(strategy_id: str, payload: ManagedStrategyUpdate, current_user: OptionalCurrentUserDep) -> ManagedStrategy:
     try:
         return update_strategy(strategy_id, payload, current_user.user_id if current_user else None)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Strategy not found") from exc
+
+
+@router.post("/{strategy_id}/deposit", response_model=ManagedStrategy)
+async def post_deposit(
+    strategy_id: str, payload: DepositRequest, current_user: OptionalCurrentUserDep
+) -> ManagedStrategy:
+    try:
+        return apply_deposit(strategy_id, payload, current_user.user_id if current_user else None)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Strategy not found") from exc
 

@@ -1,6 +1,4 @@
-import csv
 from datetime import date, datetime, timezone
-from io import StringIO
 from typing import Literal
 
 import httpx
@@ -8,12 +6,19 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.services.market_data import (
+    MarketDataError,
+    PriceRow,
+    fetch_provider_history,
+    parse_yahoo_chart,
+)
 
 router = APIRouter(prefix="/market", tags=["market"])
 
 AllowedSymbol = Literal[
     "QQQ",
     "QQQM",
+    "SPY",
     "SPYM",
     "TQQQ",
     "QLD",
@@ -28,13 +33,8 @@ AllowedSymbol = Literal[
     "IEF",
     "TLT",
 ]
-CACHE_TTL_SECONDS = 600
-_history_cache: dict[str, tuple[float, list["PriceRow"]]] = {}
 
-
-class PriceRow(BaseModel):
-    date: str
-    close: float
+__all__ = ["router", "PriceRow", "fetch_provider_history"]
 
 
 class HistoryResponse(BaseModel):
@@ -165,81 +165,6 @@ def reliability_failure_item(symbol: str, provider: str, reason: str) -> DataRel
     )
 
 
-def parse_stooq_csv(text: str) -> list[PriceRow]:
-    reader = csv.DictReader(StringIO(text))
-    rows: list[PriceRow] = []
-
-    for row in reader:
-        date = row.get("Date")
-        close = row.get("Close")
-        if not date or not close:
-            continue
-        try:
-            rows.append(PriceRow(date=date, close=float(close)))
-        except ValueError:
-            continue
-
-    rows.sort(key=lambda item: item.date)
-    return rows
-
-
-async def fetch_stooq_history(symbol: str) -> list[PriceRow]:
-    url = f"https://stooq.com/q/d/l/?s={symbol.lower()}&i=d"
-    timeout = httpx.Timeout(10.0, connect=5.0)
-
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-        response = await client.get(url)
-        response.raise_for_status()
-
-    rows = parse_stooq_csv(response.text)
-    if len(rows) < 2:
-        raise HTTPException(status_code=502, detail="Market data provider returned no rows")
-    return rows
-
-
-def parse_yahoo_chart(payload: dict) -> list[PriceRow]:
-    chart = payload.get("chart", {})
-    result = chart.get("result") or []
-    if not result:
-        raise HTTPException(status_code=502, detail="Market data provider returned no result")
-
-    item = result[0]
-    timestamps = item.get("timestamp") or []
-    quote = ((item.get("indicators") or {}).get("quote") or [{}])[0]
-    closes = quote.get("close") or []
-    rows: list[PriceRow] = []
-
-    for timestamp, close in zip(timestamps, closes, strict=False):
-        if close is None:
-            continue
-        date = datetime.fromtimestamp(timestamp, tz=timezone.utc).date().isoformat()
-        rows.append(PriceRow(date=date, close=float(close)))
-
-    rows.sort(key=lambda row: row.date)
-    if len(rows) < 2:
-        raise HTTPException(status_code=502, detail="Market data provider returned no rows")
-    return rows
-
-
-async def fetch_yahoo_history(symbol: str) -> list[PriceRow]:
-    url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}"
-    params = {"range": "10y", "interval": "1d"}
-    headers = {
-        "Accept": "application/json",
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"
-        ),
-    }
-    timeout = httpx.Timeout(10.0, connect=5.0)
-
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-        response = await client.get(url, params=params, headers=headers)
-        response.raise_for_status()
-
-    return parse_yahoo_chart(response.json())
-
-
 async def fetch_yahoo_intraday_quote(symbol: str) -> QuoteResponse:
     url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}"
     params = {"range": "1d", "interval": "1m"}
@@ -283,23 +208,6 @@ async def fetch_yahoo_fx_rate(symbol: str = "USDKRW=X") -> FxRateResponse:
     )
 
 
-async def fetch_provider_history(symbol: str, provider: str) -> list[PriceRow]:
-    import time
-
-    cache_key = f"{provider}:{symbol}"
-    cached = _history_cache.get(cache_key)
-    now = time.time()
-    if cached and now - cached[0] < CACHE_TTL_SECONDS:
-        return cached[1]
-
-    if provider == "yahoo":
-        rows = await fetch_yahoo_history(symbol)
-    else:
-        rows = await fetch_stooq_history(symbol)
-    _history_cache[cache_key] = (now, rows)
-    return rows
-
-
 @router.get("/quote/{symbol}", response_model=QuoteResponse)
 async def get_quote(symbol: AllowedSymbol) -> QuoteResponse:
     provider = settings.market_data_provider.lower()
@@ -310,7 +218,7 @@ async def get_quote(symbol: AllowedSymbol) -> QuoteResponse:
         if provider == "yahoo":
             return await fetch_yahoo_intraday_quote(symbol)
         rows = await fetch_provider_history(symbol, provider)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, MarketDataError) as exc:
         raise HTTPException(status_code=502, detail=f"Market quote request failed: {exc}") from exc
 
     latest = rows[-1]
@@ -328,7 +236,7 @@ async def get_quote(symbol: AllowedSymbol) -> QuoteResponse:
 async def get_usd_krw_rate() -> FxRateResponse:
     try:
         return await fetch_yahoo_fx_rate()
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, MarketDataError) as exc:
         raise HTTPException(status_code=502, detail=f"FX rate request failed: {exc}") from exc
 
 
@@ -346,8 +254,8 @@ async def get_data_reliability(
         try:
             rows = await fetch_provider_history(symbol, provider)
             items.append(reliability_item(symbol, provider, rows))
-        except HTTPException as exc:
-            items.append(reliability_failure_item(symbol, provider, str(exc.detail)))
+        except MarketDataError as exc:
+            items.append(reliability_failure_item(symbol, provider, str(exc)))
         except httpx.HTTPError as exc:
             items.append(reliability_failure_item(symbol, provider, str(exc)))
 
@@ -369,7 +277,7 @@ async def get_history(
 
     try:
         rows = await fetch_provider_history(symbol, provider)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, MarketDataError) as exc:
         raise HTTPException(status_code=502, detail=f"Market data request failed: {exc}") from exc
 
     limited_rows = rows[-limit:]

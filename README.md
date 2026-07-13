@@ -54,13 +54,13 @@ cd apps/api
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host 0.0.0.0 --port 7000
 ```
 
 Health check:
 
 ```txt
-http://localhost:8000/health
+http://localhost:7000/health
 ```
 
 ### Frontend
@@ -74,7 +74,23 @@ npm run dev
 Local web:
 
 ```txt
-http://localhost:5173
+http://localhost:4173
+```
+
+## Backtest Data
+
+- Prices come from Yahoo Finance (dividend-adjusted close, full daily history
+  back to QQQ inception in 1999), with Stooq as fallback.
+- Daily snapshots are cached under `apps/api/data/market_cache/` so the same
+  backtest is reproducible within a day and survives provider outages.
+- TQQQ (2010-) and QLD (2006-) are extended before their inception with a
+  synthetic series built from QQQ daily returns times leverage minus expense
+  and financing costs, so the 2000-2002 and 2008 crashes are always included.
+  Validate the model against real ETF history with:
+
+```powershell
+cd apps/api
+python -m scripts.validate_synthetic
 ```
 
 ## Required Environment Variables
