@@ -4,7 +4,9 @@ from pydantic import BaseModel, Field
 
 
 class InsightRequest(BaseModel):
-    context: Literal["strategy_compare", "backtest"] = "strategy_compare"
+    context: Literal["strategy_compare", "backtest", "daily_accumulation_research"] = (
+        "strategy_compare"
+    )
     payload: dict[str, Any]
     use_ai: bool = True
 

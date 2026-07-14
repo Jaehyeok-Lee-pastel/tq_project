@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from starlette.concurrency import run_in_threadpool
 
 from app.schemas.strategy import StrategyRecommendRequest, StrategyRecommendResponse
 from app.services.ai_coach import generate_coach_report
@@ -14,7 +15,7 @@ async def recommend(request: StrategyRecommendRequest) -> StrategyRecommendRespo
         return response
 
     try:
-        report = generate_coach_report(request, response)
+        report = await run_in_threadpool(generate_coach_report, request, response)
     except Exception:
         return response
 

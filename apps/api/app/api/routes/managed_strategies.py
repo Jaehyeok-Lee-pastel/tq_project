@@ -3,24 +3,6 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.api.deps import ManagedUserDep
 from app.core.config import settings
-from app.repositories.managed_strategy_repository import (
-    add_journal_entry,
-    advise_adjustment,
-    advise_contribution,
-    advise_philosophy_upgrade,
-    apply_adjustment,
-    apply_contribution,
-    apply_deposit,
-    apply_philosophy_upgrade,
-    build_backtest_request_from_strategy,
-    build_guide,
-    create_strategy,
-    delete_journal_entry,
-    delete_strategy,
-    get_strategy,
-    list_strategies,
-    update_strategy,
-)
 from app.schemas.backtest import BacktestRunResponse
 from app.schemas.managed_strategy import (
     AdoptResearchRequest,
@@ -41,6 +23,24 @@ from app.schemas.managed_strategy import (
     TodayDecision,
 )
 from app.services.backtest_engine import run_backtest
+from app.services.managed_strategy_service import (
+    add_journal_entry,
+    advise_adjustment,
+    advise_contribution,
+    advise_philosophy_upgrade,
+    apply_adjustment,
+    apply_contribution,
+    apply_deposit,
+    apply_philosophy_upgrade,
+    build_backtest_request_from_strategy,
+    build_guide,
+    create_strategy,
+    delete_journal_entry,
+    delete_strategy,
+    get_strategy,
+    list_strategies,
+    update_strategy,
+)
 from app.services.market_data import MarketDataError, business_days_since, fetch_provider_history
 from app.services.research_adoption import build_research_adoption
 from app.services.today_engine import compute_today_decision
