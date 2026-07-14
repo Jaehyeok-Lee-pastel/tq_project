@@ -1,0 +1,1025 @@
+:root {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --text: #171a21;
+  --muted: #68707d;
+  --line: #dde1e7;
+  --line-strong: #c9ced7;
+  --blue: #1f63e9;
+  --blue-2: #174db7;
+  --green: #087f5b;
+  --red: #c73737;
+  --amber: #9a6500;
+  --soft-blue: #edf3ff;
+  --soft-green: #eaf7f1;
+  --soft-red: #fff0f0;
+  --soft-amber: #fff6df;
+  --shadow: 0 8px 24px rgba(21, 27, 38, 0.06);
+  --sidebar-width: 236px;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  font-feature-settings:
+    "tnum" 1,
+    "ss01" 1;
+}
+
+button,
+input,
+select,
+textarea {
+  border-radius: 7px;
+}
+
+button {
+  min-height: 38px;
+  font-weight: 750;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+button.primary {
+  background: var(--text);
+  box-shadow: none;
+}
+
+button.primary:hover:not(:disabled) {
+  background: #292d35;
+}
+
+input,
+select,
+textarea {
+  min-height: 40px;
+  border-color: var(--line);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--blue);
+  outline: 3px solid rgba(31, 99, 233, 0.1);
+}
+
+.product-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+}
+
+.product-sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  height: 100vh;
+  flex-direction: column;
+  gap: 22px;
+  border-right: 1px solid #262a32;
+  padding: 22px 14px 16px;
+  background: #191c22;
+  color: #fff;
+}
+
+.product-brand,
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.brand-mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #171a21;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.product-brand div {
+  display: grid;
+  gap: 2px;
+}
+
+.product-brand strong {
+  font-size: 15px;
+}
+
+.product-brand small {
+  color: #9ca3af;
+  font-size: 10px;
+}
+
+.product-sidebar .app-nav {
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.product-sidebar .app-nav a {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 15px;
+  min-height: 56px;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #aeb4bf;
+  font-weight: 750;
+}
+
+.product-sidebar .app-nav a > span {
+  display: grid;
+  gap: 3px;
+  color: inherit;
+}
+
+.product-sidebar .app-nav a small {
+  color: #747c89;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.product-sidebar .app-nav a.active {
+  border-color: #363b45;
+  background: #272b33;
+  color: #ffffff;
+}
+
+.product-sidebar .app-nav a.active small {
+  color: #abb2bd;
+}
+
+.nav-chevron {
+  opacity: 0;
+}
+
+.product-sidebar .app-nav a.active .nav-chevron {
+  opacity: 1;
+}
+
+.sidebar-principle {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin-top: auto;
+  border-top: 1px solid #30343c;
+  padding: 16px 8px 0;
+  color: #d8dce3;
+}
+
+.sidebar-principle div {
+  display: grid;
+  gap: 3px;
+}
+
+.sidebar-principle strong {
+  font-size: 12px;
+}
+
+.sidebar-principle small {
+  color: #828a97;
+  font-size: 10px;
+}
+
+.product-sidebar .account-chip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 8px;
+  background: #22262d;
+}
+
+.product-sidebar .account-chip span {
+  color: #aeb4bf;
+  font-size: 10px;
+}
+
+.product-sidebar .account-chip button {
+  width: 34px;
+  min-height: 32px;
+  padding: 0;
+  border-color: #3a3f49;
+  background: transparent;
+  color: #c8cdd5;
+}
+
+.app-workspace {
+  min-width: 0;
+}
+
+.workspace-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  min-height: 70px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid var(--line);
+  padding: 10px clamp(18px, 3vw, 38px);
+  background: rgba(244, 245, 247, 0.94);
+  backdrop-filter: blur(14px);
+}
+
+.workspace-topbar > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.workspace-topbar span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.workspace-topbar h1 {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+.workspace-state {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(8, 127, 91, 0.1);
+}
+
+.app-shell {
+  width: min(100%, 1480px);
+  margin: 0 auto;
+  padding: 24px clamp(18px, 3vw, 38px) 64px;
+}
+
+.hero-panel {
+  min-height: auto;
+  align-items: center;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 0 0 20px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.hero-panel h2 {
+  max-width: 760px;
+  margin: 4px 0 7px;
+  font-size: clamp(23px, 2.4vw, 32px);
+  line-height: 1.18;
+}
+
+.hero-panel p {
+  max-width: 780px;
+  line-height: 1.5;
+}
+
+.section-label,
+.eyebrow {
+  color: var(--blue);
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.content-grid,
+.page-grid,
+.coach-dashboard {
+  gap: 12px;
+}
+
+.panel {
+  border-color: var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.panel:hover {
+  box-shadow: none;
+}
+
+.panel-title {
+  font-size: 16px;
+}
+
+.metric-grid {
+  gap: 8px;
+}
+
+.metric.panel {
+  min-height: 105px;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.metric strong,
+.cash-metrics strong,
+.execution-summary-metrics strong,
+.ranking-total strong,
+.winner-score strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.metric strong {
+  font-size: 24px;
+}
+
+.status-band,
+.auth-benefits {
+  display: none;
+}
+
+.plan-tabs,
+.manage-tabs,
+.detail-tabs,
+.strategy-toggle-list,
+.research-subtabs {
+  scrollbar-width: thin;
+}
+
+.plan-tabs button,
+.manage-tabs button,
+.detail-tabs button,
+.strategy-toggle-list button {
+  border-radius: 7px;
+}
+
+.action-band {
+  border-radius: 7px;
+}
+
+.decision-summary {
+  border: 1px solid #ccd4e1;
+  border-left: 4px solid var(--blue);
+  background: #fff;
+}
+
+/* Strategy Studio: inputs on the left, risk contract on the right. */
+.strategy-builder-grid > .strategy-input-panel {
+  order: 1;
+  grid-column: span 8;
+}
+
+.strategy-builder-grid > .strategy-risk-panel {
+  order: 2;
+  grid-column: span 4;
+}
+
+.strategy-builder-grid > .strategy-trust-panel {
+  order: 3;
+}
+
+.strategy-builder-grid > .strategy-candidates-panel {
+  order: 4;
+}
+
+.strategy-input-panel,
+.strategy-risk-panel {
+  align-self: start;
+}
+
+.strategy-input-panel .quick-input {
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+}
+
+.strategy-input-panel .holdings-list {
+  margin-top: 12px;
+}
+
+.strategy-input-panel .holding-row {
+  border-radius: 7px;
+  background: #f8f9fb;
+}
+
+.strategy-risk-panel {
+  border-top: 3px solid var(--text);
+}
+
+.strategy-risk-panel .risk-slider-box {
+  border: 0;
+  border-radius: 0;
+  padding: 10px 0 16px;
+  background: transparent;
+}
+
+.strategy-risk-panel .risk-slider-head strong {
+  font-size: 30px;
+}
+
+.strategy-risk-panel .recommendation-box {
+  border-radius: 7px;
+  background: #f4f6f8;
+}
+
+.strategy-trust-panel {
+  padding-block: 13px;
+  background: transparent;
+}
+
+.strategy-trust-panel .panel-title {
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.strategy-trust-panel .risk-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.strategy-trust-panel .risk-pill {
+  min-height: 58px;
+  background: #fff;
+}
+
+.strategy-candidates-panel {
+  border-style: dashed;
+  background: transparent;
+}
+
+.coach-report {
+  border-top: 3px solid var(--blue);
+}
+
+.coach-report > h2 {
+  font-size: clamp(21px, 2vw, 28px);
+}
+
+/* Strategy Operations: one command surface, details behind tabs. */
+.operation-grid > .strategy-list-panel {
+  grid-column: span 3;
+  align-self: start;
+}
+
+.operation-grid > .operation-command-panel {
+  grid-column: span 9;
+  border-top: 3px solid var(--blue);
+}
+
+.strategy-list-panel .strategy-list {
+  max-height: 360px;
+  overflow: auto;
+  margin-top: 12px;
+  padding-right: 2px;
+}
+
+.strategy-list button {
+  border-radius: 7px;
+  text-align: left;
+}
+
+.strategy-list button.selected {
+  border-color: #b9c8e8;
+  background: var(--soft-blue);
+}
+
+.operation-command-panel .manage-head h2 {
+  font-size: 23px;
+}
+
+.operation-command-panel .compliance-score {
+  min-width: 84px;
+  border-radius: 7px;
+}
+
+.operation-command-panel .action-band {
+  margin: 14px 0;
+  padding: 14px;
+  background: #eef3ff;
+  font-size: 15px;
+}
+
+.operation-command-panel .issue-card,
+.operation-command-panel .check-grid label {
+  border-radius: 7px;
+}
+
+.operation-tabs-panel {
+  position: sticky;
+  top: 80px;
+  z-index: 12;
+  padding: 6px;
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+}
+
+.operation-tabs-panel .manage-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.operation-tabs-panel .manage-tabs button {
+  min-height: 38px;
+  border: 0;
+  background: transparent;
+}
+
+.operation-tabs-panel .manage-tabs button.selected {
+  background: var(--text);
+  color: #fff;
+}
+
+.today-decision {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.today-decision.above,
+.today-decision.ready {
+  border-color: #a9d8c8;
+  background: #f5fbf8;
+}
+
+.execution-summary-card,
+.execution-card,
+.cash-command-card,
+.risk-budget-card,
+.reload-coach-card,
+.execution-review-card {
+  border-radius: 8px;
+  background-image: none;
+}
+
+/* Research: compact toolbar and dense, deliberate analysis canvas. */
+.research-workspace {
+  --research-surface: #f0f2f5;
+}
+
+.research-hero {
+  margin-bottom: 0;
+}
+
+.research-subtabs {
+  position: sticky;
+  top: 80px;
+  z-index: 13;
+  display: flex;
+  overflow-x: auto;
+  gap: 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 5px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+}
+
+.research-subtabs button {
+  display: inline-flex;
+  min-width: max-content;
+  min-height: 42px;
+  flex-direction: row;
+  gap: 7px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.research-subtabs button small {
+  display: none;
+}
+
+.research-subtabs button.selected {
+  background: var(--text);
+  color: #fff;
+}
+
+.research-analysis-grid {
+  padding-top: 0;
+}
+
+.research-presets-panel {
+  border: 0;
+  padding: 4px 0 8px;
+  background: transparent;
+}
+
+.research-presets-panel .report-head {
+  align-items: end;
+}
+
+.research-preset-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.research-preset-grid button {
+  min-height: 88px;
+  align-content: start;
+  border-radius: 7px;
+  background: #fff;
+  text-align: left;
+}
+
+.research-config-panel {
+  border-top: 3px solid var(--text);
+}
+
+.research-config-panel .backtest-controls {
+  grid-template-columns: repeat(5, minmax(130px, 1fr));
+  gap: 9px;
+}
+
+.research-config-panel label {
+  min-width: 0;
+}
+
+.research-rule-strip {
+  border-radius: 7px;
+  background: #f2f4f7;
+}
+
+.winner-card {
+  border: 1px solid #bfd0ef;
+  border-left: 4px solid var(--blue);
+  border-radius: 8px;
+  background: #f7faff;
+}
+
+.ranking-row,
+.comparison-chart,
+.detail-summary-card,
+.robustness-row,
+.trade-log-row {
+  border-radius: 7px;
+}
+
+.ranking-row {
+  background: #fff;
+}
+
+.comparison-chart {
+  background: #fafbfc;
+}
+
+.info-card,
+.info-principle {
+  border-radius: 8px;
+}
+
+@media (max-width: 1180px) {
+  .research-config-panel .backtest-controls {
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+  }
+
+  .research-preset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.decision-card,
+.issue-card,
+.execution-card,
+.execution-summary-card,
+.detail-summary-card,
+.risk-pill,
+.score-card,
+.score-mini {
+  border-radius: 7px;
+}
+
+.progress-track span {
+  background: var(--blue);
+}
+
+.auth-shell {
+  background: #eef0f3;
+}
+
+.auth-layout {
+  width: min(100%, 940px);
+  grid-template-columns: minmax(0, 1fr) 410px;
+  gap: 64px;
+}
+
+.auth-intro h1 {
+  max-width: 540px;
+  font-size: clamp(38px, 5vw, 58px);
+  line-height: 1.08;
+}
+
+.auth-intro p {
+  max-width: 480px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.auth-brand strong {
+  font-size: 16px;
+}
+
+.auth-brand .brand-mark {
+  background: var(--text);
+  color: #fff;
+}
+
+.auth-signal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.7fr);
+  max-width: 520px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.auth-signal > div {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+}
+
+.auth-signal > div:first-child {
+  align-content: end;
+  min-height: 120px;
+  background: #1b1e24;
+  color: #fff;
+}
+
+.auth-signal span,
+.auth-signal small {
+  color: #8e96a3;
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.auth-signal strong {
+  font-size: 22px;
+}
+
+.auth-signal-value {
+  align-content: center;
+  color: var(--green);
+}
+
+.auth-signal-value strong {
+  font-size: 15px;
+}
+
+.auth-card {
+  border-radius: 10px;
+  padding: 24px;
+  box-shadow: 0 18px 48px rgba(22, 28, 38, 0.09);
+}
+
+.auth-mode-tabs {
+  border-radius: 8px;
+  background: #f2f3f5;
+}
+
+.auth-card-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --sidebar-width: 78px;
+  }
+
+  .product-brand {
+    justify-content: center;
+  }
+
+  .product-brand > div,
+  .product-sidebar .app-nav a > span,
+  .nav-chevron,
+  .sidebar-principle div,
+  .product-sidebar .account-chip span {
+    display: none;
+  }
+
+  .product-sidebar .app-nav a {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    padding: 8px;
+  }
+
+  .sidebar-principle {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .product-sidebar .account-chip {
+    display: flex;
+    justify-content: center;
+  }
+
+  .auth-layout {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .auth-intro {
+    justify-items: center;
+    text-align: center;
+  }
+
+  .auth-signal {
+    width: min(100%, 520px);
+  }
+
+  .strategy-builder-grid > .strategy-input-panel,
+  .strategy-builder-grid > .strategy-risk-panel,
+  .operation-grid > .strategy-list-panel,
+  .operation-grid > .operation-command-panel {
+    grid-column: span 12;
+  }
+
+  .strategy-list-panel .strategy-list {
+    max-height: 220px;
+  }
+
+  .research-config-panel .backtest-controls {
+    grid-template-columns: repeat(2, minmax(130px, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .product-shell {
+    display: block;
+    padding-bottom: 68px;
+  }
+
+  .product-sidebar {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 50;
+    display: block;
+    width: 100%;
+    height: 66px;
+    padding: 6px 8px;
+    border: 0;
+    border-top: 1px solid #343943;
+  }
+
+  .product-brand,
+  .sidebar-principle,
+  .product-sidebar .account-chip {
+    display: none;
+  }
+
+  .product-sidebar .app-nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2px;
+  }
+
+  .product-sidebar .app-nav a {
+    display: flex;
+    min-height: 53px;
+    flex-direction: column;
+    gap: 3px;
+    justify-content: center;
+    border-radius: 7px;
+    padding: 5px 2px;
+    font-size: 10px;
+  }
+
+  .product-sidebar .app-nav a > span {
+    display: block;
+    font-size: 10px;
+  }
+
+  .product-sidebar .app-nav a small {
+    display: none;
+  }
+
+  .workspace-topbar {
+    min-height: 60px;
+    padding: 9px 14px;
+  }
+
+  .workspace-topbar h1 {
+    font-size: 18px;
+  }
+
+  .workspace-state {
+    font-size: 0;
+  }
+
+  .workspace-state svg {
+    display: none;
+  }
+
+  .app-shell {
+    padding: 16px 12px 32px;
+  }
+
+  .hero-panel {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding-bottom: 16px;
+  }
+
+  .hero-panel h2 {
+    font-size: 23px;
+  }
+
+  .hero-panel .hero-actions,
+  .hero-panel > button {
+    width: 100%;
+  }
+
+  .hero-panel .hero-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hero-panel > button {
+    justify-self: stretch;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric.panel {
+    min-height: 94px;
+    padding: 12px;
+  }
+
+  .metric strong {
+    font-size: 21px;
+  }
+
+  .auth-shell {
+    align-items: start;
+    padding: 20px 14px;
+  }
+
+  .auth-intro h1 {
+    font-size: 36px;
+  }
+
+  .auth-signal {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .strategy-trust-panel .risk-strip,
+  .research-config-panel .backtest-controls,
+  .research-preset-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .operation-tabs-panel,
+  .research-subtabs {
+    top: 68px;
+  }
+
+  .research-subtabs {
+    margin-inline: -4px;
+  }
+}
+
+@media (max-width: 380px) {
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+}

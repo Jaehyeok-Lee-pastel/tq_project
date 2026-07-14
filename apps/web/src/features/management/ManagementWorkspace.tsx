@@ -1060,17 +1060,17 @@ export function ManagementWorkspace() {
   }
 
   return (
-    <section className="page-grid">
-      <div className="hero-panel manage">
+    <section className="page-grid management-workspace">
+      <div className="hero-panel manage operation-hero">
         <div>
-          <span className="section-label">Strategy Operations</span>
-          <h2>채택한 전략을 계속 관리합니다</h2>
-          <p>추천받은 전략을 실제 운용 계획으로 저장하고, 실행 기록과 준수율을 함께 점검합니다.</p>
+          <span className="section-label">02 · Strategy operations</span>
+          <h2>오늘의 조건을 확인하고, 필요한 행동만 실행합니다.</h2>
+          <p>시장 상태, 전략 준수율, 다음 실행 순서로 판단합니다.</p>
         </div>
       </div>
 
-      <div className="content-grid">
-        <article className="panel span-4">
+      <div className="content-grid operation-grid">
+        <article className="panel span-4 strategy-list-panel">
           <PanelTitle icon={<BookOpenCheck size={18} />} title="내 전략" />
           <p className="muted">{status}</p>
           <div className="strategy-list">
@@ -1087,7 +1087,7 @@ export function ManagementWorkspace() {
           </div>
         </article>
 
-        <article className="panel span-8">
+        <article className="panel span-8 operation-command-panel">
           <PanelTitle
             icon={<ClipboardCheck size={18} />}
             title={selected?.research_config ? "연구전략 요약" : "오늘의 운용 가이드"}
@@ -1195,7 +1195,7 @@ export function ManagementWorkspace() {
         </article>
 
         {selected ? (
-          <article className="panel span-12 manage-tabs-panel">
+          <article className="panel span-12 manage-tabs-panel operation-tabs-panel">
             <div className="manage-tabs">
               {[
                 ["overview", "오늘의 판단"],

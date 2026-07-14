@@ -423,11 +423,11 @@ export function StrategyWorkspace() {
   }
 
   return (
-    <section className="page-grid">
-      <div className="hero-panel">
+    <section className="page-grid strategy-workspace">
+      <div className="hero-panel strategy-hero">
         <div>
-          <span className="section-label">Strategy Studio</span>
-          <h2>현재 포트폴리오를 기준으로 다음 비중을 설계합니다.</h2>
+          <span className="section-label">01 · Portfolio design</span>
+          <h2>보유 자산과 위험 한도를 하나의 운용 규칙으로 만듭니다.</h2>
           <p>{status}</p>
         </div>
         <div className="hero-actions">
@@ -472,8 +472,8 @@ export function StrategyWorkspace() {
         />
       ) : null}
 
-      <div className="content-grid">
-        <article className="panel span-12 data-quality-card">
+      <div className="content-grid strategy-builder-grid">
+        <article className="panel span-12 data-quality-card strategy-trust-panel">
           <h2 className="panel-title">데이터 신뢰도</h2>
           <div className="risk-strip">
             <div className="risk-pill low">
@@ -495,7 +495,7 @@ export function StrategyWorkspace() {
           </div>
         </article>
 
-        <article className="panel span-7">
+        <article className="panel span-7 strategy-input-panel">
           <PanelTitle icon={<Target size={18} />} title="포트폴리오 입력" />
           <div className="quick-input">
             <label>
@@ -567,7 +567,7 @@ export function StrategyWorkspace() {
           </div>
         </article>
 
-        <article className="panel span-5">
+        <article className="panel span-5 strategy-risk-panel">
           <PanelTitle icon={<SlidersHorizontal size={18} />} title="리스크 설정" />
           <div className="risk-slider-box">
             <div className="risk-slider-head">
@@ -676,7 +676,7 @@ export function StrategyWorkspace() {
           ) : null}
         </article>
 
-        <article className="panel span-12 optional-panel">
+        <article className="panel span-12 optional-panel strategy-candidates-panel">
           <div className="panel-headline">
             <PanelTitle icon={<Search size={18} />} title="후보군 추가" />
             <button type="button" onClick={() => setShowCandidates((current) => !current)}>

@@ -17,11 +17,11 @@ test.beforeEach(async ({ page }) => {
 
 test("primary workflow pages remain reachable", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "TQ Coach" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /현재 포트폴리오/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "전략 수립" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /보유 자산과 위험 한도/ })).toBeVisible();
 
   await page.getByRole("link", { name: "오늘 판단" }).click();
-  await expect(page.getByRole("heading", { name: /채택한 전략을 계속 관리/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /오늘의 조건을 확인/ })).toBeVisible();
 
   await page.getByRole("link", { name: "개인연구" }).click();
   await expect(page.getByText("현재 보유와 적립 조건")).toBeVisible();

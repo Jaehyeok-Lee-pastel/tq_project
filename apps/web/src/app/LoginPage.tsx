@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { ArrowRight, Bot, CheckCircle2, LockKeyhole, Mail, ShieldCheck, UserPlus } from "lucide-react";
+import {
+  ArrowRight,
+  ChartNoAxesCombined,
+  LockKeyhole,
+  Mail,
+  ShieldCheck,
+  UserPlus
+} from "lucide-react";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 type AuthMode = "login" | "signup";
@@ -12,7 +19,7 @@ const authCopy = {
     button: "로그인",
     switchText: "처음 오셨나요?",
     switchAction: "회원가입",
-    success: "로그인되었습니다.",
+    success: "로그인되었습니다."
   },
   signup: {
     badge: "JOIN",
@@ -21,8 +28,8 @@ const authCopy = {
     button: "회원가입",
     switchText: "이미 계정이 있으신가요?",
     switchAction: "로그인",
-    success: "회원가입 요청이 완료되었습니다. 이메일 확인 설정이 켜져 있다면 메일함을 확인해주세요.",
-  },
+    success: "회원가입 요청이 완료되었습니다. 이메일 확인 설정이 켜져 있다면 메일함을 확인해주세요."
+  }
 } satisfies Record<AuthMode, Record<string, string>>;
 
 export function LoginPage() {
@@ -35,7 +42,9 @@ export function LoginPage() {
 
   async function submit() {
     if (!isSupabaseConfigured) {
-      setStatus("Supabase 환경변수 VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY를 먼저 설정해야 합니다.");
+      setStatus(
+        "Supabase 환경변수 VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY를 먼저 설정해야 합니다."
+      );
       return;
     }
     if (!email.trim() || !password) {
@@ -56,8 +65,8 @@ export function LoginPage() {
               email: email.trim(),
               password,
               options: {
-                emailRedirectTo: window.location.origin,
-              },
+                emailRedirectTo: window.location.origin
+              }
             });
       if (result.error) throw result.error;
       setStatus(copy.success);
@@ -73,7 +82,7 @@ export function LoginPage() {
     setStatus(
       nextMode === "login"
         ? "저장한 전략과 실행 기록을 다시 불러옵니다."
-        : "새 계정을 만들면 전략 기록이 사용자별로 분리됩니다.",
+        : "새 계정을 만들면 전략 기록이 사용자별로 분리됩니다."
     );
   }
 
@@ -81,24 +90,26 @@ export function LoginPage() {
     <main className="auth-shell">
       <section className="auth-layout" aria-label="TQ Coach account access">
         <div className="auth-intro">
-          <span className="section-label">
-            <Bot size={15} />
-            TQ Coach
-          </span>
-          <h1>TQQQ 200일선 전략을 계정별로 관리하세요</h1>
-          <p>
-            로그인과 회원가입을 분리해 친구에게 공유해도 각자의 포트폴리오, 전략 버전,
-            실행 기록이 독립적으로 저장됩니다.
-          </p>
-          <div className="auth-benefits">
-            <span>
-              <ShieldCheck size={16} />
-              Supabase Auth 보호
-            </span>
-            <span>
-              <CheckCircle2 size={16} />
-              사용자별 전략 저장
-            </span>
+          <div className="auth-brand">
+            <span className="brand-mark">TQ</span>
+            <strong>TQ Coach</strong>
+          </div>
+          <h1>
+            규칙을 정하고,
+            <br />
+            기록하고, 지킵니다.
+          </h1>
+          <p>QQQ 200일선을 기준으로 오늘의 행동을 관리하는 개인 투자 워크스페이스.</p>
+          <div className="auth-signal" aria-label="전략 상태 미리보기">
+            <div>
+              <span>Strategy signal</span>
+              <strong>QQQ 200D</strong>
+            </div>
+            <div className="auth-signal-value">
+              <ChartNoAxesCombined size={20} />
+              <strong>RULE ON</strong>
+              <small>장 마감 기준 판단</small>
+            </div>
           </div>
         </div>
 
@@ -125,7 +136,9 @@ export function LoginPage() {
           </div>
 
           <div className="auth-card-head">
-            <span>{copy.badge}</span>
+            <span>
+              <ShieldCheck size={14} /> {copy.badge}
+            </span>
             <h2>{copy.title}</h2>
             <p>{copy.description}</p>
           </div>
@@ -166,7 +179,11 @@ export function LoginPage() {
               </div>
             </label>
 
-            <button className="primary auth-submit" onClick={submit} disabled={loading || !isSupabaseConfigured}>
+            <button
+              className="primary auth-submit"
+              onClick={submit}
+              disabled={loading || !isSupabaseConfigured}
+            >
               {mode === "login" ? <LockKeyhole size={17} /> : <UserPlus size={17} />}
               {loading ? "처리 중" : copy.button}
               <ArrowRight size={17} />

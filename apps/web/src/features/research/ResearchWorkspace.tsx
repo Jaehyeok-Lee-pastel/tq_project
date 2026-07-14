@@ -370,10 +370,10 @@ export function ResearchWorkspace() {
   }
 
   return (
-    <section className="page-grid">
-      <div className="hero-panel compare">
+    <section className="page-grid research-workspace">
+      <div className="hero-panel compare research-hero">
         <div>
-          <span className="section-label">Research Lab</span>
+          <span className="section-label">03 · Research workspace</span>
           <h2>
             {researchTab === "compare"
               ? "과거 데이터로 전략을 비교·검증합니다"
@@ -487,8 +487,8 @@ export function ResearchWorkspace() {
           onRun={runMonteCarlo}
         />
       ) : researchTab === "compare" ? (
-        <div className="content-grid">
-          <article className="panel span-12 research-lab-card">
+        <div className="content-grid research-analysis-grid">
+          <article className="panel span-12 research-lab-card research-presets-panel">
             <div className="report-head">
               <h2 className="panel-title">
                 <FlaskConical size={18} />
@@ -509,7 +509,7 @@ export function ResearchWorkspace() {
             </div>
           </article>
 
-          <article className="panel span-12">
+          <article className="panel span-12 research-config-panel">
             <h2 className="panel-title">
               <BarChart3 size={18} />
               현재 보유와 적립 조건
