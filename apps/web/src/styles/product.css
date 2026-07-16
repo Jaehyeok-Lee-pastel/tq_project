@@ -892,6 +892,89 @@ textarea:focus {
   border-radius: 8px;
 }
 
+.onboarding-steps {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.75fr) minmax(0, 1.25fr);
+  gap: 24px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 8px;
+  padding: 16px 18px;
+  background: #fff;
+}
+
+.onboarding-steps > div,
+.onboarding-steps li div {
+  display: grid;
+  gap: 4px;
+}
+
+.onboarding-steps > div > strong {
+  max-width: 280px;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.onboarding-steps ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-steps li {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 9px;
+  color: var(--muted);
+}
+
+.onboarding-steps li > span {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: #edf0f4;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.onboarding-steps li.active {
+  border-color: #adc4f2;
+  background: var(--soft-blue);
+  color: var(--text);
+}
+
+.onboarding-steps li.active > span {
+  background: var(--blue);
+  color: #fff;
+}
+
+.onboarding-steps li strong,
+.onboarding-steps li small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onboarding-steps li strong {
+  font-size: 11px;
+}
+
+.onboarding-steps li small {
+  font-size: 10px;
+}
+
 @media (max-width: 1180px) {
   .research-config-panel .backtest-controls {
     grid-template-columns: repeat(3, minmax(140px, 1fr));
@@ -899,6 +982,11 @@ textarea:focus {
 
   .research-preset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .onboarding-steps {
+    grid-template-columns: 1fr;
+    gap: 14px;
   }
 }
 
@@ -1230,6 +1318,16 @@ textarea:focus {
 
   .auth-signal {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .onboarding-steps,
+  .onboarding-steps ol {
+    grid-template-columns: 1fr;
+  }
+
+  .onboarding-steps {
+    gap: 12px;
+    padding: 14px;
   }
 
   .strategy-trust-panel .risk-strip,

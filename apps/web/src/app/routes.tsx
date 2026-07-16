@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 const ComparePage = lazy(() => import("../pages/ComparePage").then((module) => ({ default: module.ComparePage })));
+const HomePage = lazy(() => import("../pages/HomePage").then((module) => ({ default: module.HomePage })));
 const InfoPage = lazy(() => import("../pages/InfoPage").then((module) => ({ default: module.InfoPage })));
 const ManagementPage = lazy(() => import("../pages/ManagementPage").then((module) => ({ default: module.ManagementPage })));
 const RulesPage = lazy(() => import("../pages/RulesPage").then((module) => ({ default: module.RulesPage })));
@@ -13,7 +14,8 @@ export function AppRoutes() {
   return (
     <Suspense fallback={<div className="route-loading">화면을 불러오는 중입니다.</div>}>
       <Routes>
-        <Route path="/" element={<StrategyPage />} />
+        <Route path="/" element={<HomePage />} />
+        <Route path="/strategy" element={<StrategyPage />} />
         <Route path="/lab" element={<ComparePage />} />
         <Route path="/info" element={<InfoPage />} />
         <Route path="/compare" element={<Navigate to="/lab" replace />} />

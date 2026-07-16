@@ -18,6 +18,7 @@ export function App() {
   const location = useLocation();
 
   const pageMeta = {
+    "/strategy": ["Strategy setup", "Portfolio design"],
     "/": ["전략 수립", "Portfolio design"],
     "/manage": ["오늘 판단", "Strategy operations"],
     "/lab": ["개인연구", "Research workspace"],
@@ -53,7 +54,7 @@ export function App() {
         </div>
 
         <nav className="app-nav" aria-label="주요 메뉴">
-          <NavLink to="/" end>
+          <NavLink to="/strategy">
             <ChartNoAxesCombined size={18} />
             <span>
               전략 수립

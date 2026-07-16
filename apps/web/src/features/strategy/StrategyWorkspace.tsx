@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Bot,
   BrainCircuit,
@@ -259,6 +260,7 @@ function stanceLabel(stance: CandidateOpinion["stance"]) {
 }
 
 export function StrategyWorkspace() {
+  const navigate = useNavigate();
   const [holdings, setHoldings] = useState<HoldingInput[]>(defaultHoldings);
   const [quickInput, setQuickInput] = useState("");
   const [cash, setCash] = useState(0);
@@ -292,6 +294,7 @@ export function StrategyWorkspace() {
     () => recommendedProfile(profile.risk_score),
     [profile.risk_score]
   );
+  const onboardingStep = recommendation ? 3 : totalCapital > 0 ? 2 : 1;
 
   useEffect(() => {
     if (recommendation?.plans[0]) setSelectedPlanId(recommendation.plans[0].id);
@@ -415,6 +418,7 @@ export function StrategyWorkspace() {
       setStatus(
         "전략을 저장했습니다. 상단의 전략 관리 메뉴에서 운용 가이드와 기록장을 확인하세요."
       );
+      navigate("/manage");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "전략 저장에 실패했습니다.");
     } finally {
@@ -424,6 +428,28 @@ export function StrategyWorkspace() {
 
   return (
     <section className="page-grid strategy-workspace">
+      {!recommendation ? (
+        <article className="onboarding-steps" aria-label="전략 수립 진행 단계">
+          <div>
+            <span className="section-label">시작하기</span>
+            <strong>세 단계로 내 투자 규칙의 초안을 만듭니다.</strong>
+          </div>
+          <ol>
+            <li className={onboardingStep === 1 ? "active" : ""}>
+              <span>1</span>
+              <div><strong>현재 자금</strong><small>보유 종목과 현금</small></div>
+            </li>
+            <li className={onboardingStep === 2 ? "active" : ""}>
+              <span>2</span>
+              <div><strong>위험 성향</strong><small>지킬 수 있는 수준</small></div>
+            </li>
+            <li className={onboardingStep === 3 ? "active" : ""}>
+              <span>3</span>
+              <div><strong>비교 후 채택</strong><small>하나의 규칙으로 관리</small></div>
+            </li>
+          </ol>
+        </article>
+      ) : null}
       <div className="hero-panel strategy-hero">
         <div>
           <span className="section-label">01 · Portfolio design</span>
@@ -442,7 +468,7 @@ export function StrategyWorkspace() {
         </div>
       </div>
 
-      <div className="metric-grid">
+      {totalCapital > 0 || recommendation ? <div className="metric-grid">
         <Metric label="총 자산" value={formatKrw(totalCapital)} note="보유금액 + 현금" />
         <Metric
           label="리스크 허용도"
@@ -459,7 +485,7 @@ export function StrategyWorkspace() {
           value={formatUsd(market.qqq_close)}
           note={formatUsd(market.qqq_sma200)}
         />
-      </div>
+      </div> : null}
 
       {recommendation && selectedPlan ? (
         <DecisionSummary
@@ -473,7 +499,7 @@ export function StrategyWorkspace() {
       ) : null}
 
       <div className="content-grid strategy-builder-grid">
-        <article className="panel span-12 data-quality-card strategy-trust-panel">
+        {recommendation ? <article className="panel span-12 data-quality-card strategy-trust-panel">
           <h2 className="panel-title">데이터 신뢰도</h2>
           <div className="risk-strip">
             <div className="risk-pill low">
@@ -493,9 +519,9 @@ export function StrategyWorkspace() {
               <strong>백테스트 + 모의</strong>
             </div>
           </div>
-        </article>
+        </article> : null}
 
-        <article className="panel span-7 strategy-input-panel">
+        <article id="portfolio-input" className="panel span-7 strategy-input-panel">
           <PanelTitle icon={<Target size={18} />} title="포트폴리오 입력" />
           <div className="quick-input">
             <label>
@@ -567,7 +593,7 @@ export function StrategyWorkspace() {
           </div>
         </article>
 
-        <article className="panel span-5 strategy-risk-panel">
+        <article id="risk-input" className="panel span-5 strategy-risk-panel">
           <PanelTitle icon={<SlidersHorizontal size={18} />} title="리스크 설정" />
           <div className="risk-slider-box">
             <div className="risk-slider-head">
