@@ -1114,7 +1114,7 @@ export function ManagementWorkspace() {
     <section className="page-grid management-workspace">
       <div className="hero-panel manage operation-hero">
         <div>
-          <span className="section-label">02 · Strategy operations</span>
+            <span className="section-label">오늘의 실행 가이드</span>
           <h2>오늘의 행동부터 확인하고, 나머지는 필요할 때 봅니다.</h2>
           <p>시장은 매일 달라져도, 실행은 채택한 규칙 안에서만 합니다.</p>
         </div>
@@ -1138,7 +1138,7 @@ export function ManagementWorkspace() {
       <div className="content-grid operation-grid">
         {selected ? (
           <article className="panel span-12 manage-tabs-panel operation-tabs-panel">
-            <div className="manage-tabs">
+            <div className="manage-tabs" role="tablist" aria-label="전략 관리 보기">
               {[
                 ["overview", "오늘의 판단"],
                 ["journal", "실행 기록"],
@@ -1148,6 +1148,8 @@ export function ManagementWorkspace() {
                   className={activeTab === id ? "selected" : ""}
                   key={id}
                   onClick={() => setActiveTab(id as ManageTab)}
+                  aria-selected={activeTab === id}
+                  role="tab"
                   type="button"
                 >
                   {label}

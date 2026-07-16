@@ -536,12 +536,12 @@
   line-height: 1.55;
 }
 
-.onboarding-steps {
+.onboarding-card .onboarding-steps {
   display: grid;
   gap: 8px;
 }
 
-.onboarding-steps span {
+.onboarding-card .onboarding-steps span {
   display: flex;
   min-height: 44px;
   align-items: center;
@@ -555,13 +555,13 @@
   font-weight: 900;
 }
 
-.onboarding-steps span.done {
+.onboarding-card .onboarding-steps span.done {
   border-color: rgba(15, 138, 99, 0.22);
   background: var(--soft-green);
   color: var(--green);
 }
 
-.onboarding-steps strong {
+.onboarding-card .onboarding-steps strong {
   display: grid;
   width: 25px;
   height: 25px;

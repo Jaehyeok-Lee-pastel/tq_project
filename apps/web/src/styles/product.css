@@ -1,34 +1,10 @@
-:root {
-  --bg: #f4f5f7;
-  --panel: #ffffff;
-  --text: #171a21;
-  --muted: #68707d;
-  --line: #dde1e7;
-  --line-strong: #c9ced7;
-  --blue: #1f63e9;
-  --blue-2: #174db7;
-  --green: #087f5b;
-  --red: #c73737;
-  --amber: #9a6500;
-  --soft-blue: #edf3ff;
-  --soft-green: #eaf7f1;
-  --soft-red: #fff0f0;
-  --soft-amber: #fff6df;
-  --shadow: 0 8px 24px rgba(21, 27, 38, 0.06);
-  --sidebar-width: 236px;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --surface-subtle: #f8f9fb;
-}
-
 html {
   background: var(--bg);
 }
 
 body {
+  font-family: var(--font-body);
+  font-size: var(--font-size-body);
   background: var(--bg);
   font-feature-settings:
     "tnum" 1,
@@ -43,8 +19,8 @@ textarea {
 }
 
 button {
-  min-height: 38px;
-  font-weight: 750;
+  min-height: 44px;
+  font-weight: 600;
   transition:
     border-color 160ms ease,
     background-color 160ms ease,
@@ -135,7 +111,7 @@ textarea:focus {
 
 .product-brand small {
   color: #9ca3af;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .product-sidebar .app-nav {
@@ -169,8 +145,8 @@ textarea:focus {
 
 .product-sidebar .app-nav a small {
   color: #747c89;
-  font-size: 10px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .product-sidebar .app-nav a.active {
@@ -207,12 +183,12 @@ textarea:focus {
 }
 
 .sidebar-principle strong {
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .sidebar-principle small {
   color: #828a97;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .product-sidebar .account-chip {
@@ -227,7 +203,7 @@ textarea:focus {
 
 .product-sidebar .account-chip span {
   color: #aeb4bf;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .product-sidebar .account-chip button {
@@ -265,9 +241,8 @@ textarea:focus {
 
 .workspace-topbar span {
   color: var(--muted);
-  font-size: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .workspace-topbar h1 {
@@ -281,8 +256,8 @@ textarea:focus {
   align-items: center;
   gap: 7px;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 750;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .live-dot {
@@ -311,10 +286,11 @@ textarea:focus {
 }
 
 .hero-panel h2 {
-  max-width: 760px;
+  max-width: 680px;
   margin: 4px 0 7px;
-  font-size: clamp(23px, 2.4vw, 32px);
-  line-height: 1.18;
+  font-size: clamp(24px, 2.1vw, 31px);
+  letter-spacing: -0.035em;
+  line-height: 1.24;
 }
 
 .hero-panel p {
@@ -450,8 +426,80 @@ textarea:focus {
   align-self: start;
 }
 
+.strategy-input-panel.onboarding-active-panel {
+  border-top: 3px solid var(--text);
+}
+
 .strategy-builder-grid > .strategy-input-panel.onboarding-active-panel {
-  grid-column: span 12;
+  grid-column: span 8;
+}
+
+.strategy-builder-grid > .strategy-onboarding-preview {
+  order: 2;
+  grid-column: span 4;
+  align-self: stretch;
+  border-top: 3px solid var(--blue);
+}
+
+.strategy-onboarding-preview h3 {
+  margin: 6px 0 8px;
+  font-size: 19px;
+  line-height: 1.35;
+}
+
+.strategy-onboarding-preview > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.strategy-onboarding-preview ol {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.strategy-onboarding-preview li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.strategy-onboarding-preview li > span {
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.strategy-onboarding-preview li div {
+  display: grid;
+  gap: 2px;
+}
+
+.strategy-onboarding-preview li strong {
+  font-size: 13px;
+}
+
+.strategy-onboarding-preview li small,
+.strategy-preview-note span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.strategy-preview-note {
+  display: grid;
+  gap: 5px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.strategy-preview-note strong {
+  font-size: 12px;
 }
 
 .onboarding-market-note {
@@ -1007,10 +1055,10 @@ textarea:focus {
   border-radius: 8px;
 }
 
-.onboarding-steps {
+.strategy-onboarding {
   display: grid;
-  grid-template-columns: minmax(210px, 0.75fr) minmax(0, 1.25fr);
-  gap: 24px;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+  gap: 18px;
   align-items: center;
   border: 1px solid var(--line);
   border-left: 4px solid var(--blue);
@@ -1019,19 +1067,26 @@ textarea:focus {
   background: #fff;
 }
 
-.onboarding-steps > div,
-.onboarding-steps li div {
+.strategy-onboarding > div,
+.strategy-onboarding li div {
   display: grid;
   gap: 4px;
 }
 
-.onboarding-steps > div > strong {
+.strategy-onboarding > div > strong {
+  display: block;
+  width: auto;
+  height: auto;
+  flex: initial;
   max-width: 280px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
   font-size: 15px;
   line-height: 1.35;
 }
 
-.onboarding-steps ol {
+.strategy-onboarding ol {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
@@ -1040,7 +1095,7 @@ textarea:focus {
   list-style: none;
 }
 
-.onboarding-steps li {
+.strategy-onboarding li {
   display: flex;
   min-width: 0;
   gap: 8px;
@@ -1051,7 +1106,7 @@ textarea:focus {
   color: var(--muted);
 }
 
-.onboarding-steps li > span {
+.strategy-onboarding li > span {
   display: grid;
   width: 22px;
   height: 22px;
@@ -1064,30 +1119,37 @@ textarea:focus {
   font-weight: 800;
 }
 
-.onboarding-steps li.active {
+.strategy-onboarding li.active {
   border-color: #adc4f2;
   background: var(--soft-blue);
   color: var(--text);
 }
 
-.onboarding-steps li.active > span {
+.strategy-onboarding li.active > span {
   background: var(--blue);
   color: #fff;
 }
 
-.onboarding-steps li strong,
-.onboarding-steps li small {
+.strategy-onboarding li strong,
+.strategy-onboarding li small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.onboarding-steps li strong {
-  font-size: 11px;
+.strategy-onboarding li strong {
+  display: block;
+  width: auto;
+  height: auto;
+  flex: initial;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
 }
 
-.onboarding-steps li small {
-  font-size: 10px;
+.strategy-onboarding li small {
+  font-size: 12px;
 }
 
 @media (max-width: 1180px) {
@@ -1099,7 +1161,7 @@ textarea:focus {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .onboarding-steps {
+  .strategy-onboarding {
     grid-template-columns: 1fr;
     gap: 14px;
   }
@@ -1264,6 +1326,7 @@ textarea:focus {
   .strategy-builder-grid > .strategy-risk-panel,
   .strategy-builder-grid > .strategy-trust-panel,
   .strategy-builder-grid > .strategy-candidates-panel,
+  .strategy-builder-grid > .strategy-onboarding-preview,
   .operation-grid > .strategy-list-panel,
   .operation-grid > .operation-command-panel {
     grid-column: span 12;
@@ -1340,18 +1403,18 @@ textarea:focus {
 
   .product-sidebar .app-nav a {
     display: flex;
-    min-height: 45px;
+    min-height: 46px;
     flex-direction: column;
     gap: 3px;
     justify-content: center;
     border-radius: 7px;
     padding: 5px 2px;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .product-sidebar .app-nav a > span {
     display: block;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .product-sidebar .app-nav a small {
@@ -1458,14 +1521,46 @@ textarea:focus {
     grid-template-columns: 1fr 1fr;
   }
 
-  .onboarding-steps,
-  .onboarding-steps ol {
-    grid-template-columns: 1fr;
+  .strategy-onboarding,
+  .strategy-onboarding ol {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .onboarding-steps {
-    gap: 12px;
-    padding: 14px;
+  .strategy-onboarding {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .strategy-onboarding > div {
+    grid-column: 1 / -1;
+  }
+
+  .strategy-onboarding ol {
+    grid-column: 1 / -1;
+  }
+
+  .strategy-onboarding li {
+    min-height: 48px;
+    padding: 7px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+  }
+
+  .strategy-onboarding li > span {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
+  }
+
+  .strategy-onboarding li strong {
+    white-space: normal;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .strategy-onboarding li small {
+    display: none;
   }
 
   .salary-next-brief {
@@ -1490,6 +1585,30 @@ textarea:focus {
 
   .research-subtabs {
     margin-inline: -4px;
+  }
+}
+
+.mobile-account-action {
+  display: none;
+}
+
+@media (max-width: 620px) {
+  .workspace-topbar {
+    position: static;
+  }
+
+  .mobile-account-action {
+    display: inline-flex;
+    position: fixed;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    z-index: 60;
+    min-height: 44px;
+    padding-inline: 12px;
+    border-color: #3a3f49;
+    background: #191c22;
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
   }
 }
 

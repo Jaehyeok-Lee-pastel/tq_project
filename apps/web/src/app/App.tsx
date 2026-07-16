@@ -18,14 +18,14 @@ export function App() {
   const location = useLocation();
 
   const pageMeta = {
-    "/strategy": ["Strategy setup", "Portfolio design"],
-    "/": ["전략 수립", "Portfolio design"],
-    "/manage": ["오늘 판단", "Strategy operations"],
-    "/lab": ["개인연구", "Research workspace"],
-    "/info": ["추가정보", "Reference"],
-    "/rules": ["규칙과 신뢰도", "Methodology"],
-    "/universe": ["ETF 후보군", "Asset universe"]
-  }[location.pathname] ?? ["TQ Coach", "Rule-based investing"];
+    "/strategy": ["전략 수립", "내 투자 규칙 만들기"],
+    "/": ["전략 수립", "내 투자 규칙 만들기"],
+    "/manage": ["오늘 판단", "오늘의 실행 가이드"],
+    "/lab": ["개인연구", "비교와 검증"],
+    "/info": ["추가정보", "규칙과 후보군"],
+    "/rules": ["규칙과 신뢰도", "방법론"],
+    "/universe": ["ETF 후보군", "자산 범위"]
+  }[location.pathname] ?? ["TQ Coach", "규칙 기반 투자 코치"];
 
   if (loading) {
     return (
@@ -54,19 +54,19 @@ export function App() {
         </div>
 
         <nav className="app-nav" aria-label="주요 메뉴">
-          <NavLink to="/strategy">
-            <ChartNoAxesCombined size={18} />
-            <span>
-              전략 수립
-              <small>목표 비중 설계</small>
-            </span>
-            <ChevronRight size={15} className="nav-chevron" />
-          </NavLink>
           <NavLink to="/manage">
             <ClipboardList size={18} />
             <span>
               오늘 판단
               <small>실행과 기록</small>
+            </span>
+            <ChevronRight size={15} className="nav-chevron" />
+          </NavLink>
+          <NavLink to="/strategy">
+            <ChartNoAxesCombined size={18} />
+            <span>
+              전략 수립
+              <small>목표 비중 설계</small>
             </span>
             <ChevronRight size={15} className="nav-chevron" />
           </NavLink>
@@ -104,6 +104,11 @@ export function App() {
             </button>
           ) : null}
         </div>
+        {configured ? (
+          <button className="mobile-account-action" type="button" onClick={signOut}>
+            <LogOut size={16} /> 로그아웃
+          </button>
+        ) : null}
       </aside>
 
       <div className="app-workspace">

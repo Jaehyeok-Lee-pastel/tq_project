@@ -482,10 +482,10 @@ export function StrategyWorkspace() {
   return (
     <section className="page-grid strategy-workspace">
       {!recommendation ? (
-        <article className="onboarding-steps" aria-label="전략 수립 진행 단계">
+        <article className="strategy-onboarding" aria-label="전략 수립 진행 단계">
           <div>
-            <span className="section-label">시작하기</span>
-            <strong>세 단계로 내 투자 규칙의 초안을 만듭니다.</strong>
+            <span className="section-label">전략 수립 · {onboardingStep}/3</span>
+            <strong>지금은 {onboardingStep === 1 ? "보유 자산과 현금" : onboardingStep === 2 ? "지킬 수 있는 위험 수준" : "추천 전략 비교"}을 확인합니다.</strong>
           </div>
           <ol>
             <li className={onboardingStep === 1 ? "active" : ""}>
@@ -505,7 +505,7 @@ export function StrategyWorkspace() {
       ) : null}
       <div className="hero-panel strategy-hero">
         <div>
-          <span className="section-label">01 · Portfolio design</span>
+          <span className="section-label">내 투자 규칙 만들기</span>
           <h2>보유 자산과 위험 한도를 하나의 운용 규칙으로 만듭니다.</h2>
           <p>{status}</p>
           {!recommendation ? (
@@ -708,6 +708,26 @@ export function StrategyWorkspace() {
             </div>
           ) : null}
         </article>
+
+        {setupStep === 1 ? (
+          <aside className="panel strategy-onboarding-preview" aria-label="전략 수립 결과 미리보기">
+            <span className="section-label">입력 후 받게 될 결과</span>
+            <h3>내 운용 규칙의 초안을 확인합니다.</h3>
+            <p>
+              보유 자산과 현금을 입력하면, 감당할 수 있는 위험 수준에 맞춰 실행 가능한
+              투자 비중과 관리 기준을 제안합니다.
+            </p>
+            <ol>
+              <li><span>01</span><div><strong>권장 투자 비중</strong><small>자산별 역할과 최대 비중</small></div></li>
+              <li><span>02</span><div><strong>위험 관리 기준</strong><small>현금 비중과 손실 방어 원칙</small></div></li>
+              <li><span>03</span><div><strong>오늘의 실행 가이드</strong><small>다음 납입일과 행동 기준</small></div></li>
+            </ol>
+            <div className="strategy-preview-note">
+              <strong>첫 단계에서는 보유 자산만 입력하세요.</strong>
+              <span>추천은 아직 실행되지 않으며, 다음 단계에서 위험 성향을 함께 확인합니다.</span>
+            </div>
+          </aside>
+        ) : null}
 
         {setupStep === 2 ? <article id="risk-input" className="panel span-5 strategy-risk-panel">
           <PanelTitle icon={<SlidersHorizontal size={18} />} title="리스크 설정" />
