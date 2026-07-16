@@ -450,10 +450,97 @@ textarea:focus {
   align-self: start;
 }
 
+.strategy-builder-grid > .strategy-input-panel.onboarding-active-panel {
+  grid-column: span 12;
+}
+
+.onboarding-market-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.onboarding-market-note span:not(:last-child)::after {
+  margin-left: 12px;
+  color: var(--line-strong);
+  content: "|";
+}
+
+.onboarding-next-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.onboarding-next-action small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .strategy-input-panel .quick-input {
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: end;
   border-bottom: 1px solid var(--line);
   padding-bottom: 14px;
+}
+
+.onboarding-cashflow-note,
+.risk-disclosure {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.risk-disclosure {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.decision-evidence {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.decision-evidence summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.decision-evidence > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.decision-evidence section {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 10px;
+  background: var(--surface-subtle);
+}
+
+.decision-evidence section strong {
+  font-size: 12px;
+}
+
+.decision-evidence section p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .strategy-input-panel .holdings-list {
@@ -592,6 +679,34 @@ textarea:focus {
   padding: 14px;
   background: #eef3ff;
   font-size: 15px;
+}
+
+.salary-next-brief {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 13px 0;
+}
+
+.salary-next-brief > div {
+  display: grid;
+  gap: 3px;
+}
+
+.salary-next-brief strong {
+  font-size: 14px;
+}
+
+.salary-next-brief small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.salary-next-brief button {
+  flex: 0 0 auto;
 }
 
 .operation-command-panel .issue-card,
@@ -1290,6 +1405,29 @@ textarea:focus {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .strategy-input-panel .quick-input,
+  .decision-evidence > div {
+    grid-template-columns: 1fr;
+  }
+
+  .onboarding-market-note {
+    display: grid;
+    gap: 3px;
+  }
+
+  .onboarding-market-note span::after {
+    display: none;
+  }
+
+  .onboarding-next-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .onboarding-next-action button {
+    width: 100%;
+  }
+
   .hero-panel > button {
     justify-self: stretch;
   }
@@ -1328,6 +1466,15 @@ textarea:focus {
   .onboarding-steps {
     gap: 12px;
     padding: 14px;
+  }
+
+  .salary-next-brief {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .salary-next-brief button {
+    width: 100%;
   }
 
   .strategy-trust-panel .risk-strip,

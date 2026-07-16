@@ -89,6 +89,21 @@ const candidateAssets: CandidateAsset[] = [
 
 const defaultHoldings: HoldingInput[] = [];
 const exampleQuickInput = "QLD 150만원, ACE K반도체TOP2 100만원";
+const userSettingsKey = "tqcoach.userSettings";
+
+type CashflowSettings = { monthlyContribution: number; payDay: number };
+
+function loadCashflowSettings(): CashflowSettings {
+  try {
+    const saved = JSON.parse(localStorage.getItem(userSettingsKey) ?? "{}") as Partial<CashflowSettings>;
+    return {
+      monthlyContribution: Number(saved.monthlyContribution) || 1_000_000,
+      payDay: Math.min(31, Math.max(1, Number(saved.payDay) || 10))
+    };
+  } catch {
+    return { monthlyContribution: 1_000_000, payDay: 10 };
+  }
+}
 const defaultProfile: InvestorProfile = {
   risk_profile: "aggressive",
   risk_score: 75,
@@ -264,6 +279,8 @@ export function StrategyWorkspace() {
   const [holdings, setHoldings] = useState<HoldingInput[]>(defaultHoldings);
   const [quickInput, setQuickInput] = useState("");
   const [cash, setCash] = useState(0);
+  const [cashflow, setCashflow] = useState<CashflowSettings>(loadCashflowSettings);
+  const [setupStep, setSetupStep] = useState<1 | 2>(1);
   const [profile, setProfile] = useState<InvestorProfile>(defaultProfile);
   const [market, setMarket] = useState<MarketSnapshot>({
     qqq_close: 736.4,
@@ -294,11 +311,20 @@ export function StrategyWorkspace() {
     () => recommendedProfile(profile.risk_score),
     [profile.risk_score]
   );
-  const onboardingStep = recommendation ? 3 : totalCapital > 0 ? 2 : 1;
+  const onboardingStep = recommendation ? 3 : setupStep;
 
   useEffect(() => {
     if (recommendation?.plans[0]) setSelectedPlanId(recommendation.plans[0].id);
   }, [recommendation]);
+
+  useEffect(() => {
+    try {
+      const current = JSON.parse(localStorage.getItem(userSettingsKey) ?? "{}") as Record<string, unknown>;
+      localStorage.setItem(userSettingsKey, JSON.stringify({ ...current, ...cashflow }));
+    } catch {
+      // Local preferences are optional and must not block strategy setup.
+    }
+  }, [cashflow]);
 
   function applyQuickInput() {
     const parsed = parseQuickHoldings(quickInput);
@@ -308,6 +334,27 @@ export function StrategyWorkspace() {
     }
     setHoldings(parsed);
     setStatus(`${parsed.length}개 보유 종목을 반영했습니다.`);
+  }
+  function loadExamplePortfolio() {
+    setHoldings(parseQuickHoldings(exampleQuickInput));
+    setQuickInput(exampleQuickInput);
+    setStatus("예시 포트폴리오를 불러왔습니다. 내 보유금액에 맞게 수정할 수 있습니다.");
+  }
+  function startWithCashOnly() {
+    setQuickInput("");
+    setHoldings([]);
+    setStatus("현금만으로 시작합니다. 아래 현금과 월 추가금만 입력하세요.");
+  }
+  function advanceToRisk() {
+    if (totalCapital <= 0) {
+      setStatus("보유금액 또는 현금을 입력한 뒤 다음 단계로 갈 수 있습니다.");
+      return;
+    }
+    setSetupStep(2);
+    window.setTimeout(
+      () => document.getElementById("risk-input")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      0
+    );
   }
   function updateHolding(index: number, patch: Partial<HoldingInput>) {
     setHoldings((current) =>
@@ -395,6 +442,10 @@ export function StrategyWorkspace() {
     return () => window.clearInterval(timer);
   }, [loadMarket]);
   async function runStrategy() {
+    if (totalCapital <= 0) {
+      setStatus("현재 보유금액 또는 현금을 먼저 입력하세요. 현금만 있어도 시작할 수 있습니다.");
+      return;
+    }
     setLoading("strategy");
     setStatus("전략 추천을 계산하는 중입니다...");
     try {
@@ -455,13 +506,25 @@ export function StrategyWorkspace() {
           <span className="section-label">01 · Portfolio design</span>
           <h2>보유 자산과 위험 한도를 하나의 운용 규칙으로 만듭니다.</h2>
           <p>{status}</p>
+          {!recommendation ? (
+            <div className="onboarding-market-note">
+              <span>QQQ 기준일 {market.as_of}</span>
+              <span>200일선 {formatUsd(market.qqq_sma200)}</span>
+              <span>과거 검증은 미래 수익을 보장하지 않습니다.</span>
+            </div>
+          ) : null}
         </div>
         <div className="hero-actions">
           <button onClick={() => loadMarket()} disabled={loading === "market"}>
             <RefreshCw size={17} />
             {loading === "market" ? "갱신 중" : "시장 지표 갱신"}
           </button>
-          <button className="primary" onClick={runStrategy} disabled={loading === "strategy"}>
+          <button
+            className="primary"
+            onClick={runStrategy}
+            disabled={loading === "strategy" || setupStep === 1}
+            title={setupStep === 1 ? "보유금액 또는 현금 입력 후 위험 성향을 정하세요." : undefined}
+          >
             <Bot size={17} />
             {loading === "strategy" ? "추천 중" : "전략 추천"}
           </button>
@@ -521,7 +584,10 @@ export function StrategyWorkspace() {
           </div>
         </article> : null}
 
-        <article id="portfolio-input" className="panel span-7 strategy-input-panel">
+        <article
+          id="portfolio-input"
+          className={`panel span-7 strategy-input-panel ${setupStep === 1 ? "onboarding-active-panel" : ""}`}
+        >
           <PanelTitle icon={<Target size={18} />} title="포트폴리오 입력" />
           <div className="quick-input">
             <label>
@@ -533,6 +599,9 @@ export function StrategyWorkspace() {
               />
               <small className="input-example">예: {exampleQuickInput}</small>
             </label>
+            <button type="button" onClick={loadExamplePortfolio}>
+              예시 불러오기
+            </button>
             <button onClick={applyQuickInput}>
               <Plus size={16} />
               반영
@@ -578,6 +647,9 @@ export function StrategyWorkspace() {
             ))}
           </div>
           <div className="inline-actions">
+            <button type="button" onClick={startWithCashOnly}>
+              현금만으로 시작
+            </button>
             <button onClick={() => addHolding()}>
               <Plus size={16} />
               보유 추가
@@ -590,10 +662,51 @@ export function StrategyWorkspace() {
                 onChange={(event) => setCash(Number(event.target.value))}
               />
             </label>
+            <label>
+              월 추가금
+              <input
+                type="number"
+                min={0}
+                step={100000}
+                value={cashflow.monthlyContribution}
+                onChange={(event) =>
+                  setCashflow((current) => ({
+                    ...current,
+                    monthlyContribution: Math.max(0, Number(event.target.value))
+                  }))
+                }
+              />
+            </label>
+            <label>
+              월급일
+              <input
+                type="number"
+                min={1}
+                max={31}
+                value={cashflow.payDay}
+                onChange={(event) =>
+                  setCashflow((current) => ({
+                    ...current,
+                    payDay: Math.min(31, Math.max(1, Number(event.target.value)))
+                  }))
+                }
+              />
+            </label>
           </div>
+          <p className="onboarding-cashflow-note">
+            월 추가금은 전략 채택 뒤 오늘 판단 화면의 월급일 코치에 그대로 연결됩니다.
+          </p>
+          {setupStep === 1 ? (
+            <div className="onboarding-next-action">
+              <button className="primary" type="button" onClick={advanceToRisk}>
+                다음: 위험 성향 정하기
+              </button>
+              <small>보유금액 또는 현금을 입력하면 다음 단계로 이동합니다.</small>
+            </div>
+          ) : null}
         </article>
 
-        <article id="risk-input" className="panel span-5 strategy-risk-panel">
+        {setupStep === 2 ? <article id="risk-input" className="panel span-5 strategy-risk-panel">
           <PanelTitle icon={<SlidersHorizontal size={18} />} title="리스크 설정" />
           <div className="risk-slider-box">
             <div className="risk-slider-head">
@@ -610,6 +723,10 @@ export function StrategyWorkspace() {
               }
             />
           </div>
+          <p className="risk-disclosure">
+            레버리지 ETF는 짧은 기간에도 큰 손실이 발생할 수 있습니다. 추천은 과거 데이터와 규칙 기반의
+            교육용 판단 보조이며, 수익이나 손실 한계를 보장하지 않습니다.
+          </p>
           <div className="recommendation-box">
             <div>
               <span className="section-label">권장 세팅</span>
@@ -700,9 +817,15 @@ export function StrategyWorkspace() {
               </label>
             </div>
           ) : null}
-        </article>
+          <div className="onboarding-next-action">
+            <button className="primary" type="button" onClick={runStrategy} disabled={loading === "strategy"}>
+              <Bot size={16} /> {loading === "strategy" ? "전략 비교 중..." : "전략 3개 비교"}
+            </button>
+            <small>추천 결과에서 목표 비중, 약한 상황, 검증 기준을 비교할 수 있습니다.</small>
+          </div>
+        </article> : null}
 
-        <article className="panel span-12 optional-panel strategy-candidates-panel">
+        {setupStep === 2 || recommendation ? <article className="panel span-12 optional-panel strategy-candidates-panel">
           <div className="panel-headline">
             <PanelTitle icon={<Search size={18} />} title="후보군 추가" />
             <button type="button" onClick={() => setShowCandidates((current) => !current)}>
@@ -727,7 +850,7 @@ export function StrategyWorkspace() {
               ))}
             </div>
           ) : null}
-        </article>
+        </article> : null}
 
         {recommendation && (
           <article className="panel span-12 coach-report">
@@ -873,6 +996,23 @@ function DecisionSummary({
             {formatPct(recommendation.qqq_distance_from_200ma)}
           </span>
         </div>
+        <details className="decision-evidence">
+          <summary>채택 전 확인</summary>
+          <div>
+            <section>
+              <strong>왜 이 전략인가</strong>
+              <p>{recommendation.coach_report.why[0] ?? plan.pros[0] ?? plan.summary}</p>
+            </section>
+            <section>
+              <strong>약한 상황</strong>
+              <p>{plan.cons[0] ?? primaryWarning ?? "과거 결과는 미래 수익을 보장하지 않습니다."}</p>
+            </section>
+            <section>
+              <strong>검증 기준</strong>
+              <p>QQQ 200일선, 목표 비중, 실행 규칙을 기준으로 관리합니다.</p>
+            </section>
+          </div>
+        </details>
       </div>
       <div className="decision-stack">
         <div className="decision-card accent">

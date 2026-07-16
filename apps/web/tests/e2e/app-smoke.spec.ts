@@ -142,7 +142,8 @@ test("portfolio input produces a rendered strategy recommendation", async ({ pag
     .getByPlaceholder("보유 종목과 금액을 입력하세요")
     .fill("QLD 150만원, ACE K반도체TOP2 100만원");
   await page.getByRole("button", { name: "반영" }).click();
-  await page.getByRole("button", { name: "전략 추천" }).click();
+  await page.getByRole("button", { name: "다음: 위험 성향 정하기" }).click();
+  await page.getByRole("button", { name: "전략 3개 비교" }).click();
 
   await expect(page.getByText("테스트 추천 전략").first()).toBeVisible();
   await expect(

@@ -14,6 +14,15 @@ import {
 } from "lucide-react";
 const AUTO_MARKET_REFRESH_MS = 30 * 60 * 1000;
 
+function nextPaydayLabel(payDay: number) {
+  const now = new Date();
+  const target = new Date(now.getFullYear(), now.getMonth(), Math.min(payDay, 28));
+  if (target < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+    target.setMonth(target.getMonth() + 1);
+  }
+  return `${target.getMonth() + 1}월 ${target.getDate()}일`;
+}
+
 function todayDecisionReason(decision: TodayDecision) {
   return `규칙 판단: ${decision.headline}\n실행 근거: ${decision.instructions.join(" · ")}`;
 }
@@ -1092,6 +1101,21 @@ export function ManagementWorkspace() {
           <p>시장은 매일 달라져도, 실행은 채택한 규칙 안에서만 합니다.</p>
         </div>
       </div>
+
+      {selected ? (
+        <aside className="salary-next-brief">
+          <div>
+            <span className="section-label">NEXT CONTRIBUTION</span>
+            <strong>다음 추가금 점검: {nextPaydayLabel(payDay)}</strong>
+            <small>
+              매월 {payDay}일 · {formatKrw(monthlyContribution)} · 채택 전략 기준으로 배분합니다.
+            </small>
+          </div>
+          <button type="button" onClick={() => setActiveTab("strategy")}>
+            추가금 계획 보기
+          </button>
+        </aside>
+      ) : null}
 
       <div className="content-grid operation-grid">
         <article className="panel span-4 strategy-list-panel">
