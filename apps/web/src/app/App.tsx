@@ -1,5 +1,4 @@
 import { NavLink, useLocation } from "react-router-dom";
-import tqCoachCat from "../assets/tq-coach-cat.png";
 import {
   ChartNoAxesCombined,
   ChevronRight,
@@ -43,10 +42,13 @@ export function App() {
 
   return (
     <main className="product-shell">
+      <a className="skip-link" href="#main-content">
+        본문으로 건너뛰기
+      </a>
       <aside className="product-sidebar">
         <NavLink className="product-brand" to="/manage" aria-label="TQ Coach 홈으로 이동">
           <span className="brand-mark">
-            <img src={tqCoachCat} alt="" />
+            <img src="/q-mark.svg" alt="" />
           </span>
           <div>
             <strong>TQ Coach</strong>
@@ -124,7 +126,7 @@ export function App() {
             <Sparkles size={15} />
           </div>
         </header>
-        <div className="app-shell">
+        <div className="app-shell" id="main-content" tabIndex={-1}>
           <AppRoutes />
         </div>
       </div>

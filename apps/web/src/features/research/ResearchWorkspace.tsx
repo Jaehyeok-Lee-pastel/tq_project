@@ -971,19 +971,33 @@ function MultiStrategyChart({
 
   return (
     <div className="comparison-chart">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="전략별 백테스트 자산 곡선">
-        {backtests.map((item, index) => (
-          <path
-            d={pathFor(item.equity_curve)}
-            key={item.strategy}
-            style={{
-              stroke: chartColors[index % chartColors.length],
-              opacity: !selected || selected === item.strategy ? 1 : 0.28,
-              strokeWidth: selected === item.strategy ? 3.2 : 2
-            }}
-          />
-        ))}
-      </svg>
+      <div className="comparison-chart-frame">
+        <div className="comparison-chart-scale" aria-hidden="true">
+          <span>{Math.round(max).toLocaleString("ko-KR")}원</span>
+          <span>동일 원금 기준 자산 추이</span>
+          <span>{Math.round(min).toLocaleString("ko-KR")}원</span>
+        </div>
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="전략별 백테스트 자산 곡선">
+          <title>전략별 백테스트 자산 곡선</title>
+          <desc>선택한 전략은 진하게, 나머지 전략은 옅게 표시합니다. 범례의 전략명과 색상을 함께 확인하세요.</desc>
+          <g className="comparison-chart-grid" aria-hidden="true">
+            {[0.2, 0.4, 0.6, 0.8].map((ratio) => (
+              <line key={ratio} x1="0" x2={width} y1={height * ratio} y2={height * ratio} />
+            ))}
+          </g>
+          {backtests.map((item, index) => (
+            <path
+              d={pathFor(item.equity_curve)}
+              key={item.strategy}
+              style={{
+                stroke: chartColors[index % chartColors.length],
+                opacity: !selected || selected === item.strategy ? 1 : 0.28,
+                strokeWidth: selected === item.strategy ? 3.2 : 2
+              }}
+            />
+          ))}
+        </svg>
+      </div>
       <div className="chart-legend">
         {backtests.map((item, index) => (
           <span className={selected === item.strategy ? "selected" : ""} key={item.strategy}>

@@ -666,8 +666,61 @@
   min-height: 280px;
   display: grid;
   place-items: center;
-  color: var(--muted);
-  font-size: 0.95rem;
+}
+
+.route-loading-card {
+  display: grid;
+  width: min(100%, 440px);
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--blue);
+  border-radius: 10px;
+  padding: 20px;
+  background: #fff;
+}
+
+.route-loading-kicker {
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.route-loading-card strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.route-loading-lines {
+  display: grid;
+  gap: 7px;
+  margin-top: 4px;
+}
+
+.route-loading-lines span {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #edf0f4 20%, #f7f8fa 40%, #edf0f4 60%);
+  background-size: 200% 100%;
+  animation: route-loading-shimmer 1.25s ease-in-out infinite;
+}
+
+.route-loading-lines span:nth-child(2) {
+  width: 78%;
+  animation-delay: 80ms;
+}
+
+.route-loading-lines span:nth-child(3) {
+  width: 54%;
+  animation-delay: 160ms;
+}
+
+@keyframes route-loading-shimmer {
+  to {
+    background-position: -200% 0;
+  }
 }
 
 .detail-tabs {
@@ -691,9 +744,28 @@
   background: #fbfcff;
   margin-bottom: 14px;
 }
+.comparison-chart-frame {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+.comparison-chart-scale {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
 .comparison-chart svg {
   width: 100%;
-  height: 280px;
+  height: 260px;
+}
+.comparison-chart-grid line {
+  stroke: #e8ebf0;
+  stroke-width: 1;
 }
 .comparison-chart path {
   fill: none;

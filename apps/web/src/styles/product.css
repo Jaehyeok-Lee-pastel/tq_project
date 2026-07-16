@@ -36,6 +36,22 @@ button:active:not(:disabled) {
   transform: translateY(1px);
 }
 
+:focus-visible {
+  outline: 3px solid rgba(31, 99, 233, 0.45);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 button.primary {
   background: var(--text);
   box-shadow: none;
@@ -63,6 +79,26 @@ textarea:focus {
   min-height: 100vh;
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+}
+
+.skip-link {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 100;
+  transform: translateY(-160%);
+  border-radius: 7px;
+  padding: 10px 14px;
+  background: var(--text);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 750;
+  text-decoration: none;
+  transition: transform 160ms ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 .product-sidebar {
@@ -106,11 +142,11 @@ textarea:focus {
   overflow: hidden;
 }
 
-.product-brand .brand-mark img {
+.product-brand .brand-mark img,
+.auth-brand .brand-mark img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: center 35%;
+  object-fit: contain;
 }
 
 .product-brand div {

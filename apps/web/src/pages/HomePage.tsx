@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { fetchJson } from "../features/management/api";
 import type { ManagedStrategy } from "../features/management/types";
+import { RouteLoading } from "../components/RouteLoading";
 
 export function HomePage() {
   const [destination, setDestination] = useState<string | null>(null);
@@ -22,5 +23,5 @@ export function HomePage() {
   }, []);
 
   if (destination) return <Navigate to={destination} replace />;
-  return <div className="route-loading">내 투자 화면을 준비하고 있습니다.</div>;
+  return <RouteLoading label="내 투자 화면을 준비하고 있습니다" />;
 }

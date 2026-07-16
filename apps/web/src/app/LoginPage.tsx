@@ -91,7 +91,9 @@ export function LoginPage() {
       <section className="auth-layout" aria-label="TQ Coach account access">
         <div className="auth-intro">
           <div className="auth-brand">
-            <span className="brand-mark">TQ</span>
+            <span className="brand-mark">
+              <img src="/q-mark.svg" alt="" />
+            </span>
             <strong>TQ Coach</strong>
           </div>
           <h1>

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import { RouteLoading } from "../components/RouteLoading";
 
 const ComparePage = lazy(() => import("../pages/ComparePage").then((module) => ({ default: module.ComparePage })));
 const HomePage = lazy(() => import("../pages/HomePage").then((module) => ({ default: module.HomePage })));
@@ -12,7 +13,7 @@ const NotFoundPage = lazy(() => import("../pages/NotFoundPage").then((module) =>
 
 export function AppRoutes() {
   return (
-    <Suspense fallback={<div className="route-loading">화면을 불러오는 중입니다.</div>}>
+    <Suspense fallback={<RouteLoading label="화면을 불러오는 중입니다" />}>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/strategy" element={<StrategyPage />} />
