@@ -16,6 +16,12 @@
   --soft-amber: #fff6df;
   --shadow: 0 8px 24px rgba(21, 27, 38, 0.06);
   --sidebar-width: 236px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --surface-subtle: #f8f9fb;
 }
 
 html {
@@ -326,7 +332,7 @@ textarea:focus {
 .content-grid,
 .page-grid,
 .coach-dashboard {
-  gap: 12px;
+  gap: var(--space-4);
 }
 
 .panel {
@@ -501,22 +507,29 @@ textarea:focus {
 .operation-grid > .strategy-list-panel {
   grid-column: span 3;
   align-self: start;
+  border: 0;
+  padding: 2px 0 0;
+  background: transparent;
 }
 
 .operation-grid > .operation-command-panel {
   grid-column: span 9;
   border-top: 3px solid var(--blue);
+  padding: 20px;
 }
 
 .strategy-list-panel .strategy-list {
   max-height: 360px;
   overflow: auto;
-  margin-top: 12px;
+  margin-top: 8px;
   padding-right: 2px;
 }
 
 .strategy-list button {
+  min-height: 64px;
   border-radius: 7px;
+  padding: 11px 12px;
+  background: var(--surface-subtle);
   text-align: left;
 }
 
@@ -526,7 +539,23 @@ textarea:focus {
 }
 
 .operation-command-panel .manage-head h2 {
-  font-size: 23px;
+  max-width: 720px;
+  font-size: 24px;
+  line-height: 1.22;
+}
+
+.operation-command-panel .manage-head p {
+  max-width: 720px;
+}
+
+.operation-command-panel .fx-status {
+  display: block;
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 11px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
 }
 
 .operation-command-panel .compliance-score {
@@ -551,7 +580,7 @@ textarea:focus {
   top: 80px;
   z-index: 12;
   padding: 6px;
-  border-color: var(--line-strong);
+  border-color: var(--line);
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(12px);
 }
@@ -575,6 +604,21 @@ textarea:focus {
 .today-decision {
   border-radius: 8px;
   box-shadow: none;
+}
+
+.today-decision .report-head {
+  margin-bottom: 16px;
+  border-bottom: 1px solid rgba(8, 127, 91, 0.18);
+  padding-bottom: 14px;
+}
+
+.today-decision .cash-metrics {
+  gap: 10px;
+}
+
+.today-decision .cash-metrics span {
+  border-color: rgba(8, 127, 91, 0.2);
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .today-decision.above,
@@ -621,6 +665,40 @@ textarea:focus {
 .today-record-fields textarea {
   min-height: 104px;
   resize: vertical;
+}
+
+/* Secondary management information should support the decision, not compete with it. */
+.management-workspace .cash-command-card,
+.management-workspace .data-reliability-card,
+.management-workspace .risk-budget-card,
+.management-workspace .reload-coach-card {
+  border-right: 0;
+  border-left: 0;
+  border-radius: 0;
+  background-image: none;
+  box-shadow: none;
+}
+
+.management-workspace .cash-command-card {
+  margin: 0;
+  border-color: var(--line);
+  background: transparent;
+  padding: 18px 0;
+}
+
+.management-workspace .data-reliability-card,
+.management-workspace .risk-budget-card,
+.management-workspace .reload-coach-card {
+  margin-bottom: 0;
+  background: var(--surface-subtle);
+}
+
+.management-workspace .cash-metrics span,
+.management-workspace .reliability-grid span,
+.management-workspace .risk-budget-grid span,
+.management-workspace .reload-metrics span {
+  border-radius: 7px;
+  background: #fff;
 }
 
 .execution-summary-card,
