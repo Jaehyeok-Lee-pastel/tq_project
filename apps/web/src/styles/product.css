@@ -409,10 +409,12 @@ textarea:focus {
 
 .strategy-builder-grid > .strategy-trust-panel {
   order: 3;
+  grid-column: span 8;
 }
 
 .strategy-builder-grid > .strategy-candidates-panel {
   order: 4;
+  grid-column: span 4;
 }
 
 .strategy-input-panel,
@@ -471,8 +473,15 @@ textarea:focus {
 }
 
 .strategy-trust-panel .risk-pill {
+  display: grid;
+  gap: 4px;
   min-height: 58px;
   background: #fff;
+}
+
+.strategy-trust-panel .risk-pill strong {
+  display: block;
+  line-height: 1.2;
 }
 
 .strategy-candidates-panel {
@@ -867,6 +876,8 @@ textarea:focus {
 
   .strategy-builder-grid > .strategy-input-panel,
   .strategy-builder-grid > .strategy-risk-panel,
+  .strategy-builder-grid > .strategy-trust-panel,
+  .strategy-builder-grid > .strategy-candidates-panel,
   .operation-grid > .strategy-list-panel,
   .operation-grid > .operation-command-panel {
     grid-column: span 12;
