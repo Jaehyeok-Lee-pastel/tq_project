@@ -767,6 +767,18 @@
   stroke: #e8ebf0;
   stroke-width: 1;
 }
+.comparison-chart-endpoint {
+  color: var(--blue);
+}
+.comparison-chart-endpoint text {
+  fill: var(--text);
+  font-size: 25px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 7px;
+  stroke-linejoin: round;
+}
 .comparison-chart path {
   fill: none;
   stroke-linecap: round;

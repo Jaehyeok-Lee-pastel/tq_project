@@ -142,13 +142,6 @@ textarea:focus {
   overflow: hidden;
 }
 
-.product-brand .brand-mark img,
-.auth-brand .brand-mark img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
 .product-brand div {
   display: grid;
   gap: 2px;

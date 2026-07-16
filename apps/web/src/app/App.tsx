@@ -48,7 +48,7 @@ export function App() {
       <aside className="product-sidebar">
         <NavLink className="product-brand" to="/manage" aria-label="TQ Coach 홈으로 이동">
           <span className="brand-mark">
-            <img src="/q-mark.svg" alt="" />
+            TQ
           </span>
           <div>
             <strong>TQ Coach</strong>

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import { getSupabaseClient, isSupabaseConfigured } from "../lib/supabase";
 
 type AuthContextValue = {
   accessToken: string;
@@ -23,17 +23,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setLoading(false);
-    });
+    void getSupabaseClient()
+      .then(async (client) => {
+        const { data } = await client.auth.getSession();
+        if (!active) return;
 
-    return () => listener.subscription.unsubscribe();
+        setSession(data.session);
+        setLoading(false);
+        const { data: listener } = client.auth.onAuthStateChange((_event, nextSession) => {
+          if (!active) return;
+          setSession(nextSession);
+          setLoading(false);
+        });
+        unsubscribe = () => listener.subscription.unsubscribe();
+      })
+      .catch(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -44,7 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       user: session?.user ?? null,
       signOut: async () => {
-        await supabase.auth.signOut();
+        const client = await getSupabaseClient();
+        await client.auth.signOut();
         setSession(null);
       },
     }),

@@ -7,7 +7,7 @@ import {
   ShieldCheck,
   UserPlus
 } from "lucide-react";
-import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import { getSupabaseClient, isSupabaseConfigured } from "../lib/supabase";
 
 type AuthMode = "login" | "signup";
 
@@ -58,10 +58,11 @@ export function LoginPage() {
 
     setLoading(true);
     try {
+      const client = await getSupabaseClient();
       const result =
         mode === "login"
-          ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
-          : await supabase.auth.signUp({
+          ? await client.auth.signInWithPassword({ email: email.trim(), password })
+          : await client.auth.signUp({
               email: email.trim(),
               password,
               options: {
@@ -91,9 +92,7 @@ export function LoginPage() {
       <section className="auth-layout" aria-label="TQ Coach account access">
         <div className="auth-intro">
           <div className="auth-brand">
-            <span className="brand-mark">
-              <img src="/q-mark.svg" alt="" />
-            </span>
+            <span className="brand-mark">TQ</span>
             <strong>TQ Coach</strong>
           </div>
           <h1>

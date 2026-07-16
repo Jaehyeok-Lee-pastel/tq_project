@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import {
   BarChart3,
   Bot,
@@ -943,7 +943,7 @@ export function ResearchWorkspace() {
   );
 }
 
-function MultiStrategyChart({
+const MultiStrategyChart = memo(function MultiStrategyChart({
   backtests,
   selected
 }: {
@@ -957,17 +957,26 @@ function MultiStrategyChart({
   const range = max - min || 1;
   const width = 1000;
   const height = 280;
+  const chartTop = 24;
+  const chartBottom = 24;
+  const chartHeight = height - chartTop - chartBottom;
+  const focused = backtests.find((item) => item.strategy === selected) ?? backtests[0];
+  const focusedEnd = focused.equity_curve[focused.equity_curve.length - 1];
 
   function pathFor(points: EquityPoint[]) {
     if (points.length < 2) return "";
     return points
       .map((point, index) => {
         const x = (index / (points.length - 1)) * width;
-        const y = height - ((point.equity - min) / range) * height;
+        const y = chartTop + chartHeight - ((point.equity - min) / range) * chartHeight;
         return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
       })
       .join(" ");
   }
+
+  const focusedEndY = focusedEnd
+    ? chartTop + chartHeight - ((focusedEnd.equity - min) / range) * chartHeight
+    : chartTop + chartHeight;
 
   return (
     <div className="comparison-chart">
@@ -982,7 +991,7 @@ function MultiStrategyChart({
           <desc>선택한 전략은 진하게, 나머지 전략은 옅게 표시합니다. 범례의 전략명과 색상을 함께 확인하세요.</desc>
           <g className="comparison-chart-grid" aria-hidden="true">
             {[0.2, 0.4, 0.6, 0.8].map((ratio) => (
-              <line key={ratio} x1="0" x2={width} y1={height * ratio} y2={height * ratio} />
+              <line key={ratio} x1="0" x2={width} y1={chartTop + chartHeight * ratio} y2={chartTop + chartHeight * ratio} />
             ))}
           </g>
           {backtests.map((item, index) => (
@@ -996,6 +1005,14 @@ function MultiStrategyChart({
               }}
             />
           ))}
+          {focusedEnd ? (
+            <g className="comparison-chart-endpoint">
+              <circle cx={width - 2} cy={focusedEndY} r="6" fill="#fff" stroke="currentColor" strokeWidth="3" />
+              <text x={width - 12} y={Math.max(chartTop + 12, focusedEndY - 12)} textAnchor="end">
+                {Math.round(focusedEnd.equity).toLocaleString("ko-KR")}원
+              </text>
+            </g>
+          ) : null}
         </svg>
       </div>
       <div className="chart-legend">
@@ -1008,7 +1025,7 @@ function MultiStrategyChart({
       </div>
     </div>
   );
-}
+});
 
 function BacktestDetail({ result }: { result: BacktestResult }) {
   const [showAllTrades, setShowAllTrades] = useState(false);

@@ -1,7 +1,8 @@
-import { supabase } from "./supabase";
+import { getSupabaseClient } from "./supabase";
 
 export async function authenticatedFetch(input: RequestInfo | URL, init?: RequestInit) {
-  const { data } = await supabase.auth.getSession();
+  const client = await getSupabaseClient();
+  const { data } = await client.auth.getSession();
   const headers = new Headers(init?.headers);
   if (data.session?.access_token) {
     headers.set("Authorization", `Bearer ${data.session.access_token}`);
