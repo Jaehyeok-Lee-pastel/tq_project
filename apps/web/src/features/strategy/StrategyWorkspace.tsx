@@ -300,6 +300,7 @@ export function StrategyWorkspace() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCandidates, setShowCandidates] = useState(false);
   const marketRefreshInFlight = useRef(false);
+  const cashInputRef = useRef<HTMLInputElement>(null);
 
   const totalCapital = useMemo(
     () => cash + holdings.reduce((sum, holding) => sum + holding.amount, 0),
@@ -344,6 +345,7 @@ export function StrategyWorkspace() {
     setQuickInput("");
     setHoldings([]);
     setStatus("현금만으로 시작합니다. 아래 현금과 월 추가금만 입력하세요.");
+    window.setTimeout(() => cashInputRef.current?.focus(), 0);
   }
   function advanceToRisk() {
     if (totalCapital <= 0) {
@@ -657,6 +659,7 @@ export function StrategyWorkspace() {
             <label>
               현금
               <input
+                ref={cashInputRef}
                 type="number"
                 value={cash}
                 onChange={(event) => setCash(Number(event.target.value))}

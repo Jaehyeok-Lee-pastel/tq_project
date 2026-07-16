@@ -894,6 +894,24 @@ export function ManagementWorkspace() {
     }
   }
 
+  async function openContributionPlan() {
+    if (!selected) return;
+    setActiveTab("strategy");
+    if (selected.research_config) {
+      await loadTodayDecision(selected.id);
+      window.setTimeout(
+        () => document.getElementById("salary-deposit")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        0
+      );
+      return;
+    }
+    await requestContributionAdvice();
+    window.setTimeout(
+      () => document.getElementById("contribution-coach")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      0
+    );
+  }
+
   async function applyContributionAdvice() {
     if (!selected || !contributionAdvice) return;
     try {
@@ -1111,14 +1129,36 @@ export function ManagementWorkspace() {
               매월 {payDay}일 · {formatKrw(monthlyContribution)} · 채택 전략 기준으로 배분합니다.
             </small>
           </div>
-          <button type="button" onClick={() => setActiveTab("strategy")}>
+          <button type="button" onClick={() => void openContributionPlan()}>
             추가금 계획 보기
           </button>
         </aside>
       ) : null}
 
       <div className="content-grid operation-grid">
-        <article className="panel span-4 strategy-list-panel">
+        {selected ? (
+          <article className="panel span-12 manage-tabs-panel operation-tabs-panel">
+            <div className="manage-tabs">
+              {[
+                ["overview", "오늘의 판단"],
+                ["journal", "실행 기록"],
+                ["strategy", "내 전략"]
+              ].map(([id, label]) => (
+                <button
+                  className={activeTab === id ? "selected" : ""}
+                  key={id}
+                  onClick={() => setActiveTab(id as ManageTab)}
+                  type="button"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </article>
+        ) : null}
+
+        {activeTab === "strategy" ? (
+          <article className="panel span-4 strategy-list-panel">
           <PanelTitle icon={<BookOpenCheck size={18} />} title="내 전략" />
           <p className="muted">{status}</p>
           <div className="strategy-list">
@@ -1133,9 +1173,13 @@ export function ManagementWorkspace() {
               </button>
             ))}
           </div>
-        </article>
+          </article>
+        ) : null}
 
-        <article className="panel span-8 operation-command-panel">
+        {activeTab === "strategy" || (activeTab === "overview" && !selected?.research_config) ? (
+          <article
+            className={`panel ${activeTab === "strategy" ? "span-8" : "span-12"} operation-command-panel`}
+          >
           <PanelTitle
             icon={<ClipboardCheck size={18} />}
             title={selected?.research_config ? "연구전략 요약" : "오늘의 운용 가이드"}
@@ -1240,26 +1284,6 @@ export function ManagementWorkspace() {
           ) : (
             <p className="muted">채택된 전략이 있으면 이곳에 상세 가이드가 표시됩니다.</p>
           )}
-        </article>
-
-        {selected ? (
-          <article className="panel span-12 manage-tabs-panel operation-tabs-panel">
-            <div className="manage-tabs">
-              {[
-                ["overview", "오늘의 판단"],
-                ["journal", "실행 기록"],
-                ["strategy", "내 전략"]
-              ].map(([id, label]) => (
-                <button
-                  className={activeTab === id ? "selected" : ""}
-                  key={id}
-                  onClick={() => setActiveTab(id as ManageTab)}
-                  type="button"
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
           </article>
         ) : null}
 
@@ -1755,7 +1779,7 @@ export function ManagementWorkspace() {
         ) : null}
 
         {activeTab === "strategy" && selected?.research_config ? (
-          <article className="panel span-12 adjustment-coach">
+          <article id="salary-deposit" className="panel span-12 adjustment-coach">
             <PanelTitle icon={<Save size={18} />} title="월급 추가금 입금" />
             <div className="adjustment-form">
               <div>
@@ -1967,7 +1991,7 @@ export function ManagementWorkspace() {
         ) : null}
 
         {activeTab === "strategy" && selected && !selected.research_config ? (
-          <article className="panel span-12 adjustment-coach">
+          <article id="contribution-coach" className="panel span-12 adjustment-coach">
             <PanelTitle icon={<Save size={18} />} title="월급 추가금 코치" />
             <div className="adjustment-form">
               <div>
