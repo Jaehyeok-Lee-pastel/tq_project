@@ -11,7 +11,6 @@ import {
   Target,
   Trash2
 } from "lucide-react";
-import tqCoachCat from "../../assets/tq-coach-cat.png";
 import type {
   PriceRow,
   HoldingInput,
@@ -712,11 +711,6 @@ export function StrategyWorkspace() {
 
         {setupStep === 1 ? (
           <aside className="panel strategy-onboarding-preview" aria-label="전략 수립 결과 미리보기">
-            <img
-              className="tq-coach-cat"
-              src={tqCoachCat}
-              alt="규칙을 안내하는 TQ Coach 고양이"
-            />
             <span className="section-label">입력 후 받게 될 결과</span>
             <h3>내 운용 규칙의 초안을 확인합니다.</h3>
             <p>

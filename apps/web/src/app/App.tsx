@@ -1,4 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
+import tqCoachCat from "../assets/tq-coach-cat.png";
 import {
   ChartNoAxesCombined,
   ChevronRight,
@@ -43,15 +44,15 @@ export function App() {
   return (
     <main className="product-shell">
       <aside className="product-sidebar">
-        <div className="product-brand">
-          <span className="brand-mark" aria-hidden="true">
-            TQ
+        <NavLink className="product-brand" to="/manage" aria-label="TQ Coach 홈으로 이동">
+          <span className="brand-mark">
+            <img src={tqCoachCat} alt="" />
           </span>
           <div>
             <strong>TQ Coach</strong>
             <small>Rule-based investing</small>
           </div>
-        </div>
+        </NavLink>
 
         <nav className="app-nav" aria-label="주요 메뉴">
           <NavLink to="/manage">
