@@ -423,6 +423,28 @@ textarea:focus {
   grid-column: span 4;
 }
 
+.strategy-builder-grid > .coach-report {
+  order: 5;
+}
+
+.strategy-builder-grid > .strategy-trust-panel {
+  padding: 14px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.strategy-trust-panel .panel-title {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.strategy-trust-panel .risk-pill {
+  border-color: var(--line);
+  background: var(--surface-subtle);
+}
+
 .strategy-input-panel,
 .strategy-risk-panel {
   align-self: start;
@@ -507,6 +529,7 @@ textarea:focus {
 .operation-grid > .strategy-list-panel {
   grid-column: span 3;
   align-self: start;
+  order: 1;
   border: 0;
   padding: 2px 0 0;
   background: transparent;
@@ -514,6 +537,7 @@ textarea:focus {
 
 .operation-grid > .operation-command-panel {
   grid-column: span 9;
+  order: 2;
   border-top: 3px solid var(--blue);
   padding: 20px;
 }
@@ -576,6 +600,7 @@ textarea:focus {
 }
 
 .operation-tabs-panel {
+  order: -2;
   position: sticky;
   top: 80px;
   z-index: 12;
@@ -602,6 +627,7 @@ textarea:focus {
 }
 
 .today-decision {
+  order: -3;
   border-radius: 8px;
   box-shadow: none;
 }
@@ -665,6 +691,16 @@ textarea:focus {
 .today-record-fields textarea {
   min-height: 104px;
   resize: vertical;
+}
+
+.today-record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
 }
 
 /* Secondary management information should support the decision, not compete with it. */
@@ -754,6 +790,34 @@ textarea:focus {
 .research-subtabs button.selected {
   background: var(--text);
   color: #fff;
+}
+
+.research-advanced-settings {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.research-advanced-settings summary {
+  display: flex;
+  min-height: 38px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.research-advanced-settings summary small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.research-advanced-grid {
+  margin-top: 10px;
 }
 
 .research-analysis-grid {

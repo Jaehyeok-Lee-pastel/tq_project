@@ -21,7 +21,7 @@ test("primary workflow pages remain reachable", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /보유 자산과 위험 한도/ })).toBeVisible();
 
   await page.getByRole("link", { name: "오늘 판단" }).click();
-  await expect(page.getByRole("heading", { name: /오늘의 조건을 확인/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /오늘의 행동부터 확인/ })).toBeVisible();
 
   await page.getByRole("link", { name: "개인연구" }).click();
   await expect(page.getByText("현재 보유와 적립 조건")).toBeVisible();

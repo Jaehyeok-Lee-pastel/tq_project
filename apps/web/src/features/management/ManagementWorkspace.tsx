@@ -91,6 +91,7 @@ export function ManagementWorkspace() {
   const [todayStatus, setTodayStatus] = useState("");
   const [todayLogReason, setTodayLogReason] = useState("");
   const [todayLogNote, setTodayLogNote] = useState("");
+  const [todayRecordOpen, setTodayRecordOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState(0);
   const [depositNote, setDepositNote] = useState("");
   const [depositing, setDepositing] = useState(false);
@@ -528,6 +529,7 @@ export function ManagementWorkspace() {
       setTodayDecision(next);
       setTodayLogReason(todayDecisionReason(next));
       setTodayLogNote("");
+      setTodayRecordOpen(false);
       setTodayStatus(
         `기준일 ${next.as_of}${next.data_age_days > 1 ? ` (데이터 ${next.data_age_days}일 경과 — 최신 여부 확인)` : ""}`
       );
@@ -632,6 +634,7 @@ export function ManagementWorkspace() {
         });
       }
       setStatus(`오늘의 판단을 실행 기록에 남겼습니다 (${entries.length}건).`);
+      setTodayRecordOpen(false);
       await loadStrategies();
       if (selected.id) await loadGuide(selected.id);
     } catch (error) {
@@ -1085,8 +1088,8 @@ export function ManagementWorkspace() {
       <div className="hero-panel manage operation-hero">
         <div>
           <span className="section-label">02 · Strategy operations</span>
-          <h2>오늘의 조건을 확인하고, 필요한 행동만 실행합니다.</h2>
-          <p>시장 상태, 전략 준수율, 다음 실행 순서로 판단합니다.</p>
+          <h2>오늘의 행동부터 확인하고, 나머지는 필요할 때 봅니다.</h2>
+          <p>시장은 매일 달라져도, 실행은 채택한 규칙 안에서만 합니다.</p>
         </div>
       </div>
 
@@ -1256,10 +1259,9 @@ export function ManagementWorkspace() {
                     className="primary"
                     type="button"
                     disabled={todayAlreadyLogged}
-                    onClick={() => void logTodayDecision()}
+                    onClick={() => setTodayRecordOpen(true)}
                   >
-                    <Save size={15} />{" "}
-                    {todayAlreadyLogged ? "오늘 기록 완료" : "오늘 지시 기록하기"}
+                    <Save size={15} /> {todayAlreadyLogged ? "오늘 기록 완료" : "오늘 기록 준비"}
                   </button>
                 ) : null}
               </div>
@@ -1328,7 +1330,7 @@ export function ManagementWorkspace() {
                     <li key={instruction}>{instruction}</li>
                   ))}
                 </ul>
-                {!todayAlreadyLogged ? (
+                {todayRecordOpen && !todayAlreadyLogged ? (
                   <section className="today-record-editor" aria-label="오늘 판단 기록 보완">
                     <div className="today-record-editor-head">
                       <span className="section-label">Record Context</span>
@@ -1355,6 +1357,18 @@ export function ManagementWorkspace() {
                           placeholder="예: 실제 체결가는 예상보다 높았고, 다음 적립 전 20일선과 남은 월 예산을 다시 확인"
                         />
                       </label>
+                    </div>
+                    <div className="today-record-actions">
+                      <button type="button" onClick={() => setTodayRecordOpen(false)}>
+                        취소
+                      </button>
+                      <button
+                        className="primary"
+                        type="button"
+                        onClick={() => void logTodayDecision()}
+                      >
+                        <Save size={15} /> 오늘 기록 저장
+                      </button>
                     </div>
                   </section>
                 ) : null}

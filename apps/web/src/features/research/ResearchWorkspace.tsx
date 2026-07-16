@@ -604,92 +604,104 @@ export function ResearchWorkspace() {
                   <option value="SPYM">SPYM</option>
                 </select>
               </label>
-              <label>
-                현금/SGOV 기대수익
-                <input
-                  type="number"
-                  value={config.cash_yield}
-                  onChange={(event) => updateConfig("cash_yield", Number(event.target.value))}
-                />
-              </label>
-              <label>
-                기준 이동평균
-                <input
-                  type="number"
-                  min={50}
-                  max={300}
-                  value={config.moving_average_days}
-                  onChange={(event) =>
-                    updateConfig("moving_average_days", Number(event.target.value))
-                  }
-                />
-              </label>
-              <label>
-                조기 방어 밴드 %
-                <input
-                  type="number"
-                  min={-5}
-                  max={5}
-                  step={0.5}
-                  value={config.ma_exit_band_pct}
-                  onChange={(event) => updateConfig("ma_exit_band_pct", Number(event.target.value))}
-                />
-              </label>
-              <label>
-                이월분 재투입 일수 (0=끄기)
-                <input
-                  type="number"
-                  min={0}
-                  max={126}
-                  value={config.reserve_redeploy_days}
-                  onChange={(event) =>
-                    updateConfig("reserve_redeploy_days", Number(event.target.value))
-                  }
-                />
-              </label>
-              <label className="switch">
-                <input
-                  type="checkbox"
-                  checked={config.one_x_upfront_monthly}
-                  onChange={(event) => updateConfig("one_x_upfront_monthly", event.target.checked)}
-                />
-                1x 월급날 선매수 (TQQQ는 매일)
-              </label>
-              <label>
-                이탈 시 방어 모드
-                <select
-                  value={config.defense_mode}
-                  onChange={(event) =>
-                    updateConfig(
-                      "defense_mode",
-                      event.target.value as CompareConfig["defense_mode"]
-                    )
-                  }
-                >
-                  <option value="">전략 기본값</option>
-                  <option value="cash">현금/SGOV 100%</option>
-                  <option value="spym_sgov_half">SPYM+SGOV 반반</option>
-                  <option value="hold_one_x">1x 계속 보유</option>
-                </select>
-              </label>
-              <label>
-                시작일 (비우면 1999년~)
-                <input
-                  type="date"
-                  min="1999-12-01"
-                  value={config.start_date}
-                  onChange={(event) => updateConfig("start_date", event.target.value)}
-                />
-              </label>
-              <label>
-                종료일 (비우면 최신)
-                <input
-                  type="date"
-                  value={config.end_date}
-                  onChange={(event) => updateConfig("end_date", event.target.value)}
-                />
-              </label>
             </div>
+            <details className="research-advanced-settings">
+              <summary>
+                <span>검증 조건과 고급 설정</span>
+                <small>이동평균, 방어 밴드, 재투입, 기간</small>
+              </summary>
+              <div className="backtest-controls research-advanced-grid">
+                <label>
+                  현금/SGOV 기대수익
+                  <input
+                    type="number"
+                    value={config.cash_yield}
+                    onChange={(event) => updateConfig("cash_yield", Number(event.target.value))}
+                  />
+                </label>
+                <label>
+                  기준 이동평균
+                  <input
+                    type="number"
+                    min={50}
+                    max={300}
+                    value={config.moving_average_days}
+                    onChange={(event) =>
+                      updateConfig("moving_average_days", Number(event.target.value))
+                    }
+                  />
+                </label>
+                <label>
+                  조기 방어 밴드 %
+                  <input
+                    type="number"
+                    min={-5}
+                    max={5}
+                    step={0.5}
+                    value={config.ma_exit_band_pct}
+                    onChange={(event) =>
+                      updateConfig("ma_exit_band_pct", Number(event.target.value))
+                    }
+                  />
+                </label>
+                <label>
+                  이월분 재투입 일수 (0=끄기)
+                  <input
+                    type="number"
+                    min={0}
+                    max={126}
+                    value={config.reserve_redeploy_days}
+                    onChange={(event) =>
+                      updateConfig("reserve_redeploy_days", Number(event.target.value))
+                    }
+                  />
+                </label>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={config.one_x_upfront_monthly}
+                    onChange={(event) =>
+                      updateConfig("one_x_upfront_monthly", event.target.checked)
+                    }
+                  />
+                  1x 월급날 선매수 (TQQQ는 매일)
+                </label>
+                <label>
+                  이탈 시 방어 모드
+                  <select
+                    value={config.defense_mode}
+                    onChange={(event) =>
+                      updateConfig(
+                        "defense_mode",
+                        event.target.value as CompareConfig["defense_mode"]
+                      )
+                    }
+                  >
+                    <option value="">전략 기본값</option>
+                    <option value="cash">현금/SGOV 100%</option>
+                    <option value="spym_sgov_half">SPYM+SGOV 반반</option>
+                    <option value="hold_one_x">1x 계속 보유</option>
+                  </select>
+                </label>
+                <label>
+                  시작일 (비우면 1999년~)
+                  <input
+                    type="date"
+                    min="1999-12-01"
+                    value={config.start_date}
+                    onChange={(event) => updateConfig("start_date", event.target.value)}
+                  />
+                </label>
+                <label>
+                  종료일 (비우면 최신)
+                  <input
+                    type="date"
+                    value={config.end_date}
+                    onChange={(event) => updateConfig("end_date", event.target.value)}
+                  />
+                </label>
+              </div>
+            </details>
             <div className="strategy-toggle-list">
               {allStrategies.map((strategy) => (
                 <button
