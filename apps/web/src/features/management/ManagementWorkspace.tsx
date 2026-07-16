@@ -14,6 +14,10 @@ import {
 } from "lucide-react";
 const AUTO_MARKET_REFRESH_MS = 30 * 60 * 1000;
 
+function todayDecisionReason(decision: TodayDecision) {
+  return `규칙 판단: ${decision.headline}\n실행 근거: ${decision.instructions.join(" · ")}`;
+}
+
 import type {
   AdjustmentAdvice,
   BacktestStrategy,
@@ -85,6 +89,8 @@ export function ManagementWorkspace() {
   const [activeTab, setActiveTab] = useState<ManageTab>("overview");
   const [todayDecision, setTodayDecision] = useState<TodayDecision | null>(null);
   const [todayStatus, setTodayStatus] = useState("");
+  const [todayLogReason, setTodayLogReason] = useState("");
+  const [todayLogNote, setTodayLogNote] = useState("");
   const [depositAmount, setDepositAmount] = useState(0);
   const [depositNote, setDepositNote] = useState("");
   const [depositing, setDepositing] = useState(false);
@@ -520,6 +526,8 @@ export function ManagementWorkspace() {
     try {
       const next = await fetchJson<TodayDecision>(`/managed-strategies/${id}/today`);
       setTodayDecision(next);
+      setTodayLogReason(todayDecisionReason(next));
+      setTodayLogNote("");
       setTodayStatus(
         `기준일 ${next.as_of}${next.data_age_days > 1 ? ` (데이터 ${next.data_age_days}일 경과 — 최신 여부 확인)` : ""}`
       );
@@ -534,6 +542,12 @@ export function ManagementWorkspace() {
   async function logTodayDecision() {
     if (!selected || !todayDecision || todayAlreadyLogged) return;
     const decision = todayDecision;
+    const recordReason = todayLogReason.trim();
+    const personalNote = todayLogNote.trim();
+    if (!recordReason) {
+      setStatus("기록 근거를 확인하거나 직접 입력한 뒤 저장해주세요.");
+      return;
+    }
     const entries: {
       entry_type: JournalEntry["entry_type"];
       symbol: string;
@@ -606,7 +620,14 @@ export function ManagementWorkspace() {
             quantity: 0,
             price: 0,
             mood: "calm",
-            note: `오늘의 판단 자동 기록 (${decision.as_of})`
+            reason: `${entry.reason} | ${recordReason}`,
+            note: [
+              `오늘의 판단 자동 기록 (${decision.as_of})`,
+              `판단 기준: QQQ 200일선 대비 ${decision.distance_pct >= 0 ? "+" : ""}${decision.distance_pct.toFixed(2)}% · ${decision.tier_label}`,
+              personalNote ? `개인 메모: ${personalNote}` : ""
+            ]
+              .filter(Boolean)
+              .join("\n")
           })
         });
       }
@@ -1307,6 +1328,36 @@ export function ManagementWorkspace() {
                     <li key={instruction}>{instruction}</li>
                   ))}
                 </ul>
+                {!todayAlreadyLogged ? (
+                  <section className="today-record-editor" aria-label="오늘 판단 기록 보완">
+                    <div className="today-record-editor-head">
+                      <span className="section-label">Record Context</span>
+                      <h3>저장 전 판단 근거를 확인하세요</h3>
+                      <p>
+                        자동 계산된 규칙 근거에 실제 실행 이유와 체결 상황을 보완하면 이후 실행
+                        리뷰가 더 정확해집니다.
+                      </p>
+                    </div>
+                    <div className="today-record-fields">
+                      <label>
+                        규칙·실행 이유
+                        <textarea
+                          value={todayLogReason}
+                          onChange={(event) => setTodayLogReason(event.target.value)}
+                          placeholder="예: 200일선 위 유지와 이격도 감속 규칙을 확인해 오늘 적립을 실행"
+                        />
+                      </label>
+                      <label>
+                        개인 메모 (선택)
+                        <textarea
+                          value={todayLogNote}
+                          onChange={(event) => setTodayLogNote(event.target.value)}
+                          placeholder="예: 실제 체결가는 예상보다 높았고, 다음 적립 전 20일선과 남은 월 예산을 다시 확인"
+                        />
+                      </label>
+                    </div>
+                  </section>
+                ) : null}
                 {todayDecision.redeploy_active ? (
                   <p className="muted">
                     방어 현금 재투입 진행 중: {todayDecision.redeploy_day}/21일차
