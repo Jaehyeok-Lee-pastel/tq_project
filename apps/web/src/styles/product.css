@@ -439,6 +439,21 @@ textarea:focus {
   grid-column: span 4;
   align-self: stretch;
   border-top: 3px solid var(--blue);
+  position: relative;
+  overflow: hidden;
+  padding-right: 108px;
+}
+
+.tq-coach-cat {
+  position: absolute;
+  top: 12px;
+  right: 10px;
+  width: 94px;
+  height: 94px;
+  object-fit: cover;
+  object-position: center 42%;
+  border-radius: 50%;
+  box-shadow: 0 6px 16px rgba(21, 27, 38, 0.08);
 }
 
 .strategy-onboarding-preview h3 {
@@ -1389,6 +1404,10 @@ textarea:focus {
     grid-column: span 12;
   }
 
+  .strategy-builder-grid > .strategy-onboarding-preview {
+    padding-right: 126px;
+  }
+
   .strategy-list-panel .strategy-list {
     display: grid;
     grid-auto-columns: minmax(230px, 1fr);
@@ -1429,6 +1448,15 @@ textarea:focus {
 @media (max-width: 620px) {
   .today-decision-summary {
     grid-template-columns: 1fr;
+  }
+
+  .strategy-builder-grid > .strategy-onboarding-preview {
+    padding-right: 94px;
+  }
+
+  .tq-coach-cat {
+    width: 76px;
+    height: 76px;
   }
 
   .today-action-callout,
