@@ -1293,12 +1293,12 @@ export function ManagementWorkspace() {
           <article className={`panel span-12 today-decision ${todayDecision?.regime ?? "loading"}`}>
             <div className="report-head">
               <div>
-                <span className="section-label">Today Decision · 연구 규칙 기준</span>
+                <span className="section-label">오늘의 판단 · 연구 규칙 기준</span>
                 <h2 className="panel-title">
                   <ClipboardCheck size={18} />
                   {todayDecision ? todayDecision.headline : "오늘 판단 계산 중"}
                 </h2>
-                <p>{todayStatus}</p>
+                <p role="status" aria-live="polite">{todayStatus}</p>
               </div>
               <div className="hero-actions">
                 <button type="button" onClick={() => selected && loadTodayDecision(selected.id)}>
@@ -1318,6 +1318,33 @@ export function ManagementWorkspace() {
             </div>
             {todayDecision ? (
               <>
+                <div className="today-decision-summary">
+                  <section className="today-action-callout">
+                    <span className="section-label">오늘의 실행</span>
+                    <strong>
+                      {todayDecision.daily_budget > 0 && todayDecision.regime === "above"
+                        ? "정해진 금액을 규칙대로 적립하세요"
+                        : todayDecision.regime === "below_unconfirmed"
+                          ? "오늘은 현금을 유지하며 이탈 여부를 확인하세요"
+                          : "방어 규칙을 유지하고 다음 신호를 기다리세요"}
+                    </strong>
+                    <p>{todayDecision.headline}</p>
+                  </section>
+                  <section className="today-market-status" aria-label="시장 상태" role="status">
+                    <span className="section-label">시장 상태</span>
+                    <strong>
+                      {todayDecision.regime === "above"
+                        ? "정상 운용"
+                        : todayDecision.regime === "below_unconfirmed"
+                          ? "경계 관찰"
+                          : "방어 운용"}
+                    </strong>
+                    <p>
+                      QQQ가 {selected.research_config.moving_average_days}일선 대비 {todayDecision.distance_pct >= 0 ? "+" : ""}
+                      {todayDecision.distance_pct.toFixed(2)}%에 있습니다.
+                    </p>
+                  </section>
+                </div>
                 <div className="cash-metrics">
                   <span>
                     <small>QQQ vs {selected.research_config.moving_average_days}일선</small>

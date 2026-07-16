@@ -117,8 +117,24 @@ textarea:focus-visible {
   outline: 3px solid rgba(31, 99, 233, 0.38);
   outline-offset: 2px;
 }
+
+button:focus-visible,
+a:focus-visible {
+  box-shadow: 0 0 0 5px rgba(31, 99, 233, 0.14);
+}
 input[type="range"] {
   accent-color: var(--blue);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .app-shell {
