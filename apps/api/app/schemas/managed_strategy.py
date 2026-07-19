@@ -44,6 +44,8 @@ class ResearchStrategyConfig(BaseModel):
     # the Toss app); TQQQ keeps the daily decelerated cadence. Validated in
     # research study 20.
     one_x_upfront_monthly: bool = False
+    preset_id: str | None = None
+    preset_version: str | None = None
 
 
 class AdoptResearchRequest(BaseModel):

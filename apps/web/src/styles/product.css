@@ -420,6 +420,13 @@ textarea:focus {
   background: #fff;
 }
 
+.decision-preset-note {
+  margin-top: 10px;
+  color: var(--blue-deep);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 /* Strategy Studio: inputs on the left, risk contract on the right. */
 .strategy-builder-grid > .strategy-input-panel {
   order: 1;
@@ -429,6 +436,47 @@ textarea:focus {
 .strategy-builder-grid > .strategy-risk-panel {
   order: 2;
   grid-column: span 4;
+}
+
+.strategy-builder-grid > .strategy-input-panel.onboarding-complete-panel,
+.strategy-builder-grid > .strategy-risk-panel {
+  grid-column: span 12;
+}
+
+.strategy-input-panel.onboarding-complete-panel {
+  border-top: 3px solid var(--green);
+}
+
+.strategy-input-panel.onboarding-complete-panel > .quick-input,
+.strategy-input-panel.onboarding-complete-panel > .holdings-list,
+.strategy-input-panel.onboarding-complete-panel > .inline-actions,
+.strategy-input-panel.onboarding-complete-panel > .onboarding-cashflow-note,
+.strategy-input-panel.onboarding-complete-panel > .onboarding-next-action {
+  display: none;
+}
+
+.strategy-input-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 13px;
+}
+
+.strategy-input-summary > div {
+  display: grid;
+  gap: 3px;
+}
+
+.strategy-input-summary span {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.strategy-input-summary strong {
+  font-size: 14px;
 }
 
 .strategy-builder-grid > .strategy-trust-panel {
@@ -694,12 +742,95 @@ textarea:focus {
   background: transparent;
 }
 
+.strategy-candidates-panel > summary {
+  min-height: 42px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.strategy-candidates-panel[open] > summary {
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.research-preset-choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 18px;
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 15px;
+  background: var(--surface-subtle);
+}
+
+.research-preset-choice.selected {
+  border-color: #9ab6ef;
+  background: var(--soft-blue);
+}
+
+.research-preset-choice h3 {
+  margin: 4px 0 6px;
+  font-size: 16px;
+}
+
+.research-preset-choice p,
+.research-preset-choice li,
+.research-preset-choice small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.research-preset-choice p { margin: 0; }
+
+.research-preset-choice ul {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.research-preset-choice > button {
+  align-self: start;
+}
+
+.research-preset-choice > small {
+  grid-column: 1 / -1;
+  color: #9a6700;
+}
+
 .coach-report {
   border-top: 3px solid var(--blue);
 }
 
 .coach-report > h2 {
   font-size: clamp(21px, 2vw, 28px);
+}
+
+.strategy-builder-grid.has-recommendation > .strategy-input-panel,
+.strategy-builder-grid.has-recommendation > .strategy-risk-panel {
+  display: none;
+}
+
+.strategy-builder-grid.has-recommendation > .recommendation-plan-panel {
+  order: 1;
+  grid-column: span 12;
+}
+
+.strategy-builder-grid.has-recommendation > .coach-report {
+  order: 2;
+  grid-column: span 12;
+}
+
+.strategy-builder-grid.has-recommendation > .strategy-trust-panel,
+.strategy-builder-grid.has-recommendation > .strategy-candidates-panel,
+.strategy-builder-grid.has-recommendation > .strategy-evidence-panel {
+  order: 3;
+  grid-column: span 12;
 }
 
 /* Strategy Operations: one command surface, details behind tabs. */
@@ -1429,6 +1560,14 @@ textarea:focus {
   .operation-grid > .strategy-list-panel,
   .operation-grid > .operation-command-panel {
     grid-column: span 12;
+  }
+
+  .research-preset-choice {
+    grid-template-columns: 1fr;
+  }
+
+  .research-preset-choice > button {
+    width: 100%;
   }
 
   .strategy-list-panel .strategy-list {

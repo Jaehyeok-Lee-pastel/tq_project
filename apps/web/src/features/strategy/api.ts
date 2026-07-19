@@ -7,6 +7,7 @@ import type {
   MarketSnapshot,
   PriceRow,
   QuoteSnapshot,
+  ResearchStrategyConfig,
   StrategyPlan,
   StrategyResponse
 } from "./types";
@@ -57,4 +58,28 @@ export async function adoptManagedStrategy(
     })
   });
   if (!response.ok) throw new Error(`전략 채택 API 오류: ${response.status}`);
+}
+
+export async function adoptResearchStrategy(
+  researchConfig: ResearchStrategyConfig,
+  market: MarketSnapshot,
+  tqqqValue: number,
+  oneXValue: number,
+  cashValue: number
+) {
+  const response = await authenticatedFetch(`${apiBaseUrl}/managed-strategies/adopt-research`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      research_config: researchConfig,
+      market,
+      tqqq_value: tqqqValue,
+      one_x_value: oneXValue,
+      cash_value: cashValue,
+      selected_reason: "전략 수립에서 연구 기반 일일 적립 규칙을 선택",
+      source_total_score: 83
+    })
+  });
+  if (!response.ok) throw new Error(`연구 규칙 채택 실패: ${response.status}`);
+  return (await response.json()) as { id: string };
 }

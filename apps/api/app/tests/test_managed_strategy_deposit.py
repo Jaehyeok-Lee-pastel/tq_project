@@ -23,6 +23,8 @@ def strategy(monkeypatch, tmp_path):
             ma_exit_band_pct=2,
             defense_mode="cash",
             monthly_contribution=1_000_000,
+            preset_id="daily_70_30_early_defense_cash_v1",
+            preset_version="2026-07",
         ),
         market=MarketSnapshot(qqq_close=720.0, qqq_sma200=636.0, as_of="2026-07-09"),
         tqqq_value=1_600_000,
@@ -61,6 +63,8 @@ def test_deposit_leaves_audit_trail(strategy):
 def test_deposit_does_not_touch_rules(strategy):
     updated = repo.apply_deposit(strategy.id, DepositRequest(amount=500_000))
     assert updated.research_config == strategy.research_config
+    assert updated.research_config.preset_id == "daily_70_30_early_defense_cash_v1"
+    assert updated.research_config.preset_version == "2026-07"
 
 
 def test_deposit_unknown_strategy_raises(strategy):

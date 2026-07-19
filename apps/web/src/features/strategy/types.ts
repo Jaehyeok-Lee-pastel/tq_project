@@ -106,3 +106,17 @@ export type StrategyResponse = {
 };
 
 export type CandidateAsset = { symbol: string; name: string; category: string; role: string };
+
+export type ResearchStrategyConfig = {
+  strategy: "tqqq_daily_200ma";
+  daily_base_tqqq_ratio: number;
+  daily_base_one_x_ratio: number;
+  one_x_symbol: "QQQM";
+  ma_exit_band_pct: number;
+  defense_mode: "cash";
+  monthly_contribution: number;
+  moving_average_days: number;
+  one_x_upfront_monthly: boolean;
+  preset_id: string;
+  preset_version: string;
+};

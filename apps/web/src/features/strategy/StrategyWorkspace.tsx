@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bot,
-  BrainCircuit,
   CheckCircle2,
   Plus,
   RefreshCw,
@@ -23,7 +22,8 @@ import type {
   CandidateOpinion,
   StrategyPlan,
   StrategyResponse,
-  CandidateAsset
+  CandidateAsset,
+  ResearchStrategyConfig
 } from "./types";
 
 const AUTO_MARKET_REFRESH_MS = 30 * 60 * 1000;
@@ -261,12 +261,16 @@ function parseQuickHoldings(text: string) {
     .filter((holding) => holding.symbol && holding.amount > 0);
 }
 import {
+  adoptResearchStrategy,
   adoptManagedStrategy,
   fetchHistory,
   fetchQuote,
   fetchUsdKrw,
   requestRecommendation
 } from "./api";
+
+const RESEARCH_PRESET_ID = "daily_70_30_early_defense_cash_v1";
+const RESEARCH_PRESET_VERSION = "2026-07";
 function actionLabel(action: TradeAction["action"]) {
   return { buy: "매수", sell: "매도", hold: "유지", wait: "대기" }[action];
 }
@@ -299,8 +303,10 @@ export function StrategyWorkspace() {
   const [status, setStatus] = useState("포트폴리오와 리스크 점수를 입력한 뒤 전략을 추천받으세요.");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCandidates, setShowCandidates] = useState(false);
+  const [useResearchPreset, setUseResearchPreset] = useState(false);
   const marketRefreshInFlight = useRef(false);
   const cashInputRef = useRef<HTMLInputElement>(null);
+  const riskInputRef = useRef<HTMLElement>(null);
 
   const totalCapital = useMemo(
     () => cash + holdings.reduce((sum, holding) => sum + holding.amount, 0),
@@ -313,6 +319,7 @@ export function StrategyWorkspace() {
     [profile.risk_score]
   );
   const onboardingStep = recommendation ? 3 : setupStep;
+  const presetCompatible = holdings.every((holding) => ["TQQQ", "QQQM"].includes(holding.symbol.toUpperCase()));
 
   useEffect(() => {
     if (recommendation?.plans[0]) setSelectedPlanId(recommendation.plans[0].id);
@@ -354,7 +361,10 @@ export function StrategyWorkspace() {
     }
     setSetupStep(2);
     window.setTimeout(
-      () => document.getElementById("risk-input")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      () => {
+        riskInputRef.current?.focus({ preventScroll: true });
+        riskInputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      },
       0
     );
   }
@@ -467,7 +477,33 @@ export function StrategyWorkspace() {
     setLoading("adopt");
     setStatus(`${plan.title}을 내 전략으로 저장하는 중입니다...`);
     try {
-      await adoptManagedStrategy(plan, market, totalCapital);
+      if (useResearchPreset) {
+        if (!presetCompatible) {
+          throw new Error("연구 기반 일일 적립 규칙은 현재 TQQQ·QQQM·현금 보유 상태에서만 바로 채택할 수 있습니다.");
+        }
+        const researchConfig: ResearchStrategyConfig = {
+          strategy: "tqqq_daily_200ma",
+          daily_base_tqqq_ratio: 70,
+          daily_base_one_x_ratio: 30,
+          one_x_symbol: "QQQM",
+          ma_exit_band_pct: 2,
+          defense_mode: "cash",
+          monthly_contribution: cashflow.monthlyContribution,
+          moving_average_days: 200,
+          one_x_upfront_monthly: false,
+          preset_id: RESEARCH_PRESET_ID,
+          preset_version: RESEARCH_PRESET_VERSION
+        };
+        const tqqqValue = holdings
+          .filter((holding) => holding.symbol.toUpperCase() === "TQQQ")
+          .reduce((sum, holding) => sum + holding.amount, 0);
+        const oneXValue = holdings
+          .filter((holding) => holding.symbol.toUpperCase() === "QQQM")
+          .reduce((sum, holding) => sum + holding.amount, 0);
+        await adoptResearchStrategy(researchConfig, market, tqqqValue, oneXValue, cash);
+      } else {
+        await adoptManagedStrategy(plan, market, totalCapital);
+      }
       setStatus(
         "전략을 저장했습니다. 상단의 전략 관리 메뉴에서 운용 가이드와 기록장을 확인하세요."
       );
@@ -560,10 +596,11 @@ export function StrategyWorkspace() {
           usdKrw={usdKrw}
           onAdopt={adoptPlan}
           adopting={loading === "adopt"}
+          researchPresetActive={useResearchPreset}
         />
       ) : null}
 
-      <div className="content-grid strategy-builder-grid">
+      <div className={`content-grid strategy-builder-grid ${recommendation ? "has-recommendation" : ""}`}>
         {recommendation ? <article className="panel span-12 data-quality-card strategy-trust-panel">
           <h2 className="panel-title">데이터 신뢰도</h2>
           <div className="risk-strip">
@@ -588,9 +625,20 @@ export function StrategyWorkspace() {
 
         <article
           id="portfolio-input"
-          className={`panel span-7 strategy-input-panel ${setupStep === 1 ? "onboarding-active-panel" : ""}`}
+          className={`panel span-7 strategy-input-panel ${setupStep === 1 ? "onboarding-active-panel" : "onboarding-complete-panel"}`}
         >
           <PanelTitle icon={<Target size={18} />} title="포트폴리오 입력" />
+          {setupStep === 2 && !recommendation ? (
+            <div className="strategy-input-summary">
+              <div>
+                <span>입력 완료</span>
+                <strong>총 자산 {formatKrw(totalCapital)} · 월 추가금 {formatKrw(cashflow.monthlyContribution)}</strong>
+              </div>
+              <button type="button" onClick={() => setSetupStep(1)}>
+                입력 수정
+              </button>
+            </div>
+          ) : null}
           <div className="quick-input">
             <label>
               빠른 입력
@@ -729,7 +777,7 @@ export function StrategyWorkspace() {
           </aside>
         ) : null}
 
-        {setupStep === 2 ? <article id="risk-input" className="panel span-5 strategy-risk-panel">
+        {setupStep === 2 ? <article ref={riskInputRef} id="risk-input" tabIndex={-1} className="panel span-5 strategy-risk-panel">
           <PanelTitle icon={<SlidersHorizontal size={18} />} title="리스크 설정" />
           <div className="risk-slider-box">
             <div className="risk-slider-head">
@@ -746,6 +794,26 @@ export function StrategyWorkspace() {
               }
             />
           </div>
+          <section className={`research-preset-choice ${useResearchPreset ? "selected" : ""}`} aria-labelledby="research-preset-title">
+            <div>
+              <span className="section-label">연구 기반 운용 규칙</span>
+              <h3 id="research-preset-title">7:3 · 조기방어 2% · 현금 방어</h3>
+              <p>1999년 이후 동일 조건 비교에서 종합 83점으로 상위권에 오른 규칙입니다. 미래 성과를 보장하지 않습니다.</p>
+            </div>
+            <ul>
+              <li>월 추가금은 TQQQ 70% · QQQM 30%로 일일 집행</li>
+              <li>QQQ 200일선 +2% 아래 2거래일 확인 시 현금·SGOV 방어</li>
+            </ul>
+            <button
+              type="button"
+              className={useResearchPreset ? "primary" : ""}
+              onClick={() => setUseResearchPreset((current) => !current)}
+              disabled={!presetCompatible}
+            >
+              {useResearchPreset ? "연구 규칙 적용됨" : "이 규칙 적용"}
+            </button>
+            {!presetCompatible ? <small>현재는 TQQQ·QQQM·현금 보유 상태에서만 이 규칙을 바로 채택할 수 있습니다.</small> : null}
+          </section>
           <p className="risk-disclosure">
             레버리지 ETF는 짧은 기간에도 큰 손실이 발생할 수 있습니다. 추천은 과거 데이터와 규칙 기반의
             교육용 판단 보조이며, 수익이나 손실 한계를 보장하지 않습니다.
@@ -848,7 +916,8 @@ export function StrategyWorkspace() {
           </div>
         </article> : null}
 
-        {setupStep === 2 || recommendation ? <article className="panel span-12 optional-panel strategy-candidates-panel">
+        {setupStep === 2 || recommendation ? <details className="panel span-12 optional-panel strategy-candidates-panel">
+          <summary>상세 근거와 후보군</summary>
           <div className="panel-headline">
             <PanelTitle icon={<Search size={18} />} title="후보군 추가" />
             <button type="button" onClick={() => setShowCandidates((current) => !current)}>
@@ -873,7 +942,7 @@ export function StrategyWorkspace() {
               ))}
             </div>
           ) : null}
-        </article> : null}
+        </details> : null}
 
         {recommendation && (
           <article className="panel span-12 coach-report">
@@ -883,15 +952,14 @@ export function StrategyWorkspace() {
             <div className="report-columns">
               <ListBlock title="추천 이유" items={recommendation.coach_report.why} />
               <ListBlock title="다음 액션" items={recommendation.coach_report.next_actions} />
-              <ListBlock title="모니터링" items={recommendation.coach_report.monitoring_rules} />
-              <ListBlock title="주의" items={recommendation.coach_report.warnings} tone="warn" />
+              <details className="secondary-details"><summary>모니터링과 주의사항</summary><div className="report-columns"><ListBlock title="모니터링" items={recommendation.coach_report.monitoring_rules} /><ListBlock title="주의" items={recommendation.coach_report.warnings} tone="warn" /></div></details>
             </div>
           </article>
         )}
 
         {recommendation?.candidate_opinions?.length ? (
-          <article className="panel span-12">
-            <PanelTitle icon={<BrainCircuit size={18} />} title="후보군 판단" />
+          <details className="panel span-12 strategy-evidence-panel optional-panel">
+            <summary>후보군 판단과 상세 근거</summary>
             <div className="opinion-grid">
               {recommendation.candidate_opinions.map((opinion) => (
                 <div className={`opinion-card ${opinion.stance}`} key={opinion.symbol}>
@@ -901,11 +969,11 @@ export function StrategyWorkspace() {
                 </div>
               ))}
             </div>
-          </article>
+          </details>
         ) : null}
 
         {recommendation && (
-          <article className="panel span-12">
+          <article className="panel span-12 recommendation-plan-panel">
             <PanelTitle icon={<CheckCircle2 size={18} />} title="추천 포트폴리오" />
             <div className="plan-tabs">
               {recommendation.plans.map((plan) => (
@@ -963,7 +1031,8 @@ function DecisionSummary({
   quotes,
   usdKrw,
   onAdopt,
-  adopting
+  adopting,
+  researchPresetActive
 }: {
   recommendation: StrategyResponse;
   plan: StrategyPlan;
@@ -971,6 +1040,7 @@ function DecisionSummary({
   usdKrw: FxSnapshot | null;
   onAdopt: (plan: StrategyPlan) => void;
   adopting: boolean;
+  researchPresetActive: boolean;
 }) {
   const topAllocations = [...plan.allocations]
     .sort((a, b) => b.target_ratio - a.target_ratio)
@@ -1010,6 +1080,9 @@ function DecisionSummary({
         <span className="section-label">오늘의 판단</span>
         <h2>{recommendation.coach_report.headline}</h2>
         <p>{primaryAction}</p>
+        {researchPresetActive ? (
+          <p className="decision-preset-note">채택하면 연구 기반의 7:3 일일 적립·조기 방어 규칙으로 저장됩니다.</p>
+        ) : null}
         <div className="decision-actions">
           <button className="primary" onClick={() => onAdopt(plan)} disabled={adopting}>
             {adopting ? "저장 중" : "이 전략 채택"}

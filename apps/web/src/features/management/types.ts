@@ -37,6 +37,8 @@ export type ResearchConfig = {
   monthly_contribution: number;
   moving_average_days: number;
   one_x_upfront_monthly?: boolean;
+  preset_id?: string | null;
+  preset_version?: string | null;
 };
 export type TodayDecision = {
   as_of: string;
