@@ -1011,6 +1011,48 @@ textarea:focus {
 .suitability-check > summary small { color: var(--muted); font-weight: 600; }
 .suitability-check[open] > summary { margin-bottom: 12px; }
 
+.preference-check {
+  padding: 16px;
+  background: var(--surface-subtle);
+}
+
+.preference-check-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.preference-check-head small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.preference-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.preference-summary strong {
+  font-size: 13px;
+}
+
+.preference-summary span {
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.strategy-result-anchor {
+  scroll-margin-top: 88px;
+  outline: none;
+}
+
 .suitability-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
