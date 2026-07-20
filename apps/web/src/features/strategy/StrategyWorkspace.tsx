@@ -391,7 +391,7 @@ export function StrategyWorkspace() {
   const preferenceSummary = [
     suitability.horizon === "long" ? "장기 투자" : "단기 투자",
     suitability.drawdown === "high" ? "큰 변동 감내" : "손실 제한 우선",
-    executionStyle === "daily" ? "매일 적립" : "조건형 분할"
+    executionStyle === "daily" ? "레버리지 일일 · 코어 일괄" : "조건형 분할"
   ].join(" · ");
 
   useEffect(() => {
@@ -607,7 +607,7 @@ export function StrategyWorkspace() {
           defense_mode: "cash",
           monthly_contribution: cashflow.monthlyContribution,
           moving_average_days: 200,
-          one_x_upfront_monthly: false,
+          one_x_upfront_monthly: true,
           preset_id: useResearchPreset ? RESEARCH_PRESET_ID : "strategy_daily_recommendation",
           preset_version: RESEARCH_PRESET_VERSION
         };
@@ -983,8 +983,8 @@ export function StrategyWorkspace() {
                 aria-pressed={executionStyle === "daily"}
                 onClick={() => setExecutionStyle("daily")}
               >
-                <strong>매일 적립</strong>
-                <span>매일 1회 · 과열 시 자동 감속</span>
+                <strong>레버리지 일일 · 코어 일괄</strong>
+                <span>TQQQ는 매일 감속 · 1x 코어는 입금일 일괄 · SGOV는 방어자금 유지</span>
               </button>
               <button
                 type="button"
@@ -1001,12 +1001,12 @@ export function StrategyWorkspace() {
             <div>
               <span className="section-label">연구 기반 운용 규칙</span>
               <h3 id="research-preset-title">
-                {researchPresetRecommended ? "추천 · 7:3 일일 적립" : "7:3 · 조기방어 2% · 현금 방어"}
+                {researchPresetRecommended ? "추천 · 7:3 레버리지 일일 · 코어 일괄" : "7:3 · 조기방어 2% · 현금 방어"}
               </h3>
               <p>1999년 이후 동일 조건 비교에서 종합 83점으로 상위권에 오른 규칙입니다. 미래 성과를 보장하지 않습니다.</p>
             </div>
             <ul>
-              <li>월 추가금은 TQQQ 70% · QQQM 30%로 일일 집행</li>
+              <li>월 추가금은 TQQQ 70%를 일일 감속 집행하고 QQQM 30%는 입금일 일괄 매수</li>
               <li>QQQ 200일선 +2% 아래 2거래일 확인 시 현금 100% 방어</li>
             </ul>
             {researchPresetRecommended ? <button
@@ -1113,7 +1113,7 @@ export function StrategyWorkspace() {
           ) : null}
           <div className="onboarding-next-action">
             <button className="primary" type="button" onClick={runStrategy} disabled={loading === "strategy"}>
-              <Bot size={16} /> {loading === "strategy" ? "전략 비교 중..." : executionStyle === "daily" ? "매일 적립 3개 비교" : "조건형 전략 3개 비교"}
+              <Bot size={16} /> {loading === "strategy" ? "전략 비교 중..." : executionStyle === "daily" ? "레버리지 일일 · 코어 일괄 3개 비교" : "조건형 전략 3개 비교"}
             </button>
             <small>추천 결과에서 목표 비중, 약한 상황, 검증 기준을 비교할 수 있습니다.</small>
           </div>
@@ -1301,7 +1301,7 @@ function DecisionSummary({
         <h2>{recommendation.coach_report.headline}</h2>
         <p>{primaryAction}</p>
         {researchPresetActive && isDaily ? (
-          <p className="decision-preset-note">채택하면 연구 기반의 7:3 일일 적립·조기 방어 규칙으로 저장됩니다.</p>
+          <p className="decision-preset-note">채택하면 TQQQ는 일일 감속, QQQM은 입금일 일괄 매수하는 연구 기반 규칙으로 저장됩니다.</p>
         ) : null}
         <section className="market-position" aria-label="QQQ 200일선 대비 시장 위치">
           <div><span>QQQ 200일선 대비</span><strong>{formatPct(recommendation.qqq_distance_from_200ma)}</strong></div>

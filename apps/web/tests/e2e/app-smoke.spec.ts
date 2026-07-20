@@ -50,7 +50,7 @@ test("daily research rule is suggested for matching preferences", async ({ page 
   await page.getByRole("button", { name: "다음: 위험 성향 정하기" }).click();
   await page.getByRole("button", { name: "큰 변동 감내" }).click();
   await page.getByRole("button", { name: "충분함" }).click();
-  await expect(page.getByText("추천 · 7:3 일일 적립")).toBeVisible();
+  await expect(page.getByText("추천 · 7:3 레버리지 일일 · 코어 일괄")).toBeVisible();
 });
 
 test("portfolio input produces a rendered strategy recommendation", async ({ page }) => {
@@ -157,7 +157,7 @@ test("portfolio input produces a rendered strategy recommendation", async ({ pag
   await expect(page.getByText("3가지만 고르면 됩니다")).toBeVisible();
   await page.getByRole("button", { name: "답변으로 위험 한도 적용" }).click();
   await expect(page.getByText("45 / 100")).toBeVisible();
-  await page.getByRole("button", { name: "매일 적립 3개 비교" }).click();
+  await page.getByRole("button", { name: "레버리지 일일 · 코어 일괄 3개 비교" }).click();
 
   await expect(page.getByText("테스트 추천 전략").first()).toBeVisible();
   await expect(

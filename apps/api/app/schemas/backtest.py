@@ -61,7 +61,7 @@ class BacktestRunRequest(BaseModel):
     # Salary-day mode: the monthly contribution arrives as a lump on the
     # month's first trading day and the month's 1x allocation is bought
     # upfront that day (TQQQ keeps its daily decelerated cadence).
-    one_x_upfront_monthly: bool = False
+    one_x_upfront_monthly: bool = True
     ma_exit_band_pct: float = Field(default=0, ge=-5, le=5)
     overheat_trim_distance_pct: float = Field(default=25, ge=10, le=50)
     # None keeps each strategy's historical default: staged -> cash,

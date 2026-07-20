@@ -26,6 +26,7 @@ def config(**overrides) -> ResearchStrategyConfig:
         defense_mode="cash",
         monthly_contribution=1_050_000,  # 50,000/trading day
         moving_average_days=MA_DAYS,
+        one_x_upfront_monthly=False,
     )
     base.update(overrides)
     return ResearchStrategyConfig(**base)

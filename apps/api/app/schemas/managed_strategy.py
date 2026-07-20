@@ -43,7 +43,7 @@ class ResearchStrategyConfig(BaseModel):
     # Buy the month's 1x allocation as a lump on payday (fractional order in
     # the Toss app); TQQQ keeps the daily decelerated cadence. Validated in
     # research study 20.
-    one_x_upfront_monthly: bool = False
+    one_x_upfront_monthly: bool = True
     preset_id: str | None = None
     preset_version: str | None = None
 

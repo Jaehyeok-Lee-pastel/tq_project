@@ -1,4 +1,5 @@
 from app.schemas.backtest import BacktestRunRequest
+from app.schemas.managed_strategy import ResearchStrategyConfig
 from app.services.backtest_engine import (
     BacktestFrame,
     calculate_metrics,
@@ -22,6 +23,11 @@ def frame(day: int, qqq: float, tqqq: float, sma200: float = 100) -> BacktestFra
     )
 
 
+def test_research_daily_defaults_to_payday_one_x_buy() -> None:
+    assert ResearchStrategyConfig().one_x_upfront_monthly is True
+    assert BacktestRunRequest().one_x_upfront_monthly is True
+
+
 def test_daily_accumulation_200ma_slows_tqqq_buys_when_stretched():
     frames = [
         frame(1, 105, 100),
@@ -40,6 +46,7 @@ def test_daily_accumulation_200ma_slows_tqqq_buys_when_stretched():
             daily_base_one_x_ratio=30,
             one_x_symbol="QQQM",
             cash_yield=4.5,
+            one_x_upfront_monthly=False,
         ),
     )
 
@@ -72,6 +79,7 @@ def test_daily_accumulation_uses_existing_holdings_as_starting_state():
             daily_base_one_x_ratio=30,
             one_x_symbol="QQQM",
             cash_yield=4.5,
+            one_x_upfront_monthly=False,
         ),
     )
 

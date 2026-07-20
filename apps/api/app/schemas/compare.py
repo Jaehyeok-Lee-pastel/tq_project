@@ -39,7 +39,7 @@ class StrategyCompareRequest(BaseModel):
     ma_exit_band_pct: float = Field(default=0, ge=-5, le=5)
     defense_mode: DefenseMode | None = None
     reserve_redeploy_days: int = Field(default=0, ge=0, le=126)
-    one_x_upfront_monthly: bool = False
+    one_x_upfront_monthly: bool = True
 
 
 class StrategyRankItem(BaseModel):

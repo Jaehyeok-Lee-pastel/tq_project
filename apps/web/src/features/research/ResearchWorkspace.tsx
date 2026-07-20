@@ -212,7 +212,7 @@ export function ResearchWorkspace() {
     ma_exit_band_pct: 0,
     defense_mode: "",
     reserve_redeploy_days: 0,
-    one_x_upfront_monthly: false
+    one_x_upfront_monthly: true
   });
   const [selected, setSelected] = useState<BacktestStrategy[]>([
     "tqqq_daily_200ma",
@@ -695,7 +695,7 @@ export function ResearchWorkspace() {
                       updateConfig("one_x_upfront_monthly", event.target.checked)
                     }
                   />
-                  1x 월급날 선매수 (TQQQ는 매일)
+                  1x 월급날 일괄 매수 (TQQQ는 매일 감속)
                 </label>
                 <label>
                   이탈 시 방어 모드
