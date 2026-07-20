@@ -174,4 +174,7 @@ test("portfolio input produces a rendered strategy recommendation", async ({ pag
   await expect(adoptionButton).toBeDisabled();
   await adoptionCheckbox.check();
   await expect(adoptionButton).toBeEnabled();
+  await page.getByRole("button", { name: "연구실에서 검증" }).click();
+  await expect(page.getByText("추천안에서 불러옴")).toBeVisible();
+await expect(page.getByText("테스트 추천 전략", { exact: true })).toBeVisible();
 });

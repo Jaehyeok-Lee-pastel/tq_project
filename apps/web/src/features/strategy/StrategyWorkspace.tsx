@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Bot,
   CheckCircle2,
+  FlaskConical,
   Plus,
   RefreshCw,
   Search,
@@ -26,6 +27,7 @@ import type {
   ResearchStrategyConfig,
   ExecutionStyle
 } from "./types";
+import type { StrategyLabTransfer } from "../research/types";
 
 const AUTO_MARKET_REFRESH_MS = 30 * 60 * 1000;
 
@@ -286,6 +288,48 @@ function actionLabel(action: TradeAction["action"]) {
 }
 function stanceLabel(stance: CandidateOpinion["stance"]) {
   return { core: "핵심", satellite: "위성", defense: "방어", avoid: "제외", watch: "관찰" }[stance];
+}
+
+function buildResearchTransfer(
+  plan: StrategyPlan,
+  totalCapital: number,
+  monthlyContribution: number
+): StrategyLabTransfer {
+  const allocationFor = (symbol: string) =>
+    plan.allocations.find((allocation) => allocation.symbol === symbol);
+  const tqqq = allocationFor("TQQQ");
+  const qld = allocationFor("QLD");
+  const cash = plan.allocations
+    .filter((allocation) => ["CASH", "SGOV", "BIL"].includes(allocation.symbol))
+    .reduce((sum, allocation) => sum + allocation.target_amount, 0);
+  const oneX = plan.allocations.find(
+    (allocation) => !["TQQQ", "QLD", "CASH", "SGOV", "BIL"].includes(allocation.symbol)
+  );
+  const isDailyTqqq = plan.execution_style === "daily" && plan.id === "tqqq_200ma_coach";
+  const isQldPlan = plan.id === "qld_stable_aggressive";
+  return {
+    source: "strategy_recommendation",
+    plan_title: plan.title,
+    execution_style: plan.execution_style ?? "staged",
+    fidelity: isDailyTqqq || (!isQldPlan && plan.execution_style === "staged") ? "exact" : "proxy",
+    config: {
+      initial_capital: totalCapital,
+      initial_tqqq_value: tqqq?.target_amount ?? 0,
+      initial_one_x_value: oneX?.target_amount ?? 0,
+      initial_cash_value: cash,
+      monthly_contribution: monthlyContribution,
+      daily_base_tqqq_ratio: Math.round(tqqq?.target_ratio ?? 0),
+      daily_base_one_x_ratio: Math.max(0, 100 - Math.round(tqqq?.target_ratio ?? 0)),
+      tqqq_target_ratio: Math.round(tqqq?.target_ratio ?? 0),
+      qld_target_ratio: Math.round(qld?.target_ratio ?? 0),
+      one_x_symbol: oneX?.symbol ?? "QQQM",
+      ma_exit_band_pct: 2,
+      defense_mode: "cash"
+    },
+    selected: isQldPlan
+      ? ["qld_200ma", "tqqq_200ma", "qqq_buy_hold"]
+      : ["tqqq_daily_200ma", "tqqq_200ma", "qld_200ma", "qqq_buy_hold"]
+  };
 }
 
 export function StrategyWorkspace() {
@@ -606,6 +650,12 @@ export function StrategyWorkspace() {
     }
   }
 
+  function openResearchLab(plan: StrategyPlan) {
+    navigate("/lab", {
+      state: buildResearchTransfer(plan, totalCapital, cashflow.monthlyContribution)
+    });
+  }
+
   return (
     <section className="page-grid strategy-workspace">
       {!recommendation ? (
@@ -694,6 +744,7 @@ export function StrategyWorkspace() {
           hasAcknowledgedRisk={hasAcknowledgedRisk}
           onRiskAcknowledgement={setHasAcknowledgedRisk}
           onCopySummary={copyRecommendationSummary}
+          onOpenResearch={openResearchLab}
         />
         </section>
       ) : null}
@@ -1193,7 +1244,8 @@ function DecisionSummary({
   researchPresetActive,
   hasAcknowledgedRisk,
   onRiskAcknowledgement,
-  onCopySummary
+  onCopySummary,
+  onOpenResearch
 }: {
   recommendation: StrategyResponse;
   plan: StrategyPlan;
@@ -1206,6 +1258,7 @@ function DecisionSummary({
   hasAcknowledgedRisk: boolean;
   onRiskAcknowledgement: (value: boolean) => void;
   onCopySummary: () => void;
+  onOpenResearch: (plan: StrategyPlan) => void;
 }) {
   const isDaily = plan.execution_style === "daily";
   const topAllocations = [...plan.allocations]
@@ -1260,6 +1313,9 @@ function DecisionSummary({
             {adopting ? "저장 중" : "이 전략 채택"}
           </button>
           <button className="secondary" type="button" onClick={onCopySummary}>전략 요약 복사</button>
+          <button className="secondary" type="button" onClick={() => onOpenResearch(plan)}>
+            <FlaskConical size={16} /> 연구실에서 검증
+          </button>
           <span>
             {recommendation.market_regime} · QQQ 200일선 대비{" "}
             {formatPct(recommendation.qqq_distance_from_200ma)}
