@@ -859,10 +859,10 @@ export function StrategyWorkspace() {
               }
             />
           </div>
-          <section className="suitability-check" aria-labelledby="suitability-title">
+          <details className="suitability-check">
+            <summary><span>적합성 3문항</span><small>선택 사항</small></summary>
             <div>
-              <span className="section-label">간단 적합성 확인</span>
-              <h3 id="suitability-title">내 상황에 맞는 위험 한도를 먼저 정합니다.</h3>
+              <h3 id="suitability-title">내 상황에 맞는 위험 한도</h3>
             </div>
             <div className="suitability-options">
               <fieldset>
@@ -882,7 +882,7 @@ export function StrategyWorkspace() {
               </fieldset>
             </div>
             <button type="button" onClick={applySuitabilityProfile}>답변으로 위험 한도 적용</button>
-          </section>
+          </details>
           <section className={`research-preset-choice ${useResearchPreset ? "selected" : ""}`} aria-labelledby="research-preset-title">
             <div>
               <span className="section-label">연구 기반 운용 규칙</span>
@@ -1250,6 +1250,15 @@ function DecisionSummary({
               <em key={allocation.symbol}>
                 {allocation.symbol} {allocation.target_ratio.toFixed(1)}%
               </em>
+            ))}
+          </div>
+          <div className="allocation-bar" aria-label="추천 자산 비중">
+            {topAllocations.map((allocation) => (
+              <span
+                key={allocation.symbol}
+                style={{ width: `${allocation.target_ratio}%` }}
+                title={`${allocation.symbol} ${allocation.target_ratio.toFixed(1)}%`}
+              />
             ))}
           </div>
         </div>
