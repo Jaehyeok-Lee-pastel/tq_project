@@ -1,4 +1,5 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   BarChart3,
   Bot,
@@ -21,7 +22,8 @@ import type {
   MonteCarloReport,
   WalkForwardReport,
   HeatmapReport,
-  OverfittingReport
+  OverfittingReport,
+  StrategyLabTransfer
 } from "./types";
 
 const chartColors = ["#2563eb", "#0f8a63", "#a96700", "#d04444", "#7c3aed"];
@@ -152,6 +154,8 @@ import { HeatmapTab, MonteCarloTab, OverfittingTab, WalkForwardTab } from "./Adv
 const SHOW_ADVANCED_VALIDATION = false;
 
 export function ResearchWorkspace() {
+  const location = useLocation();
+  const transfer = location.state as StrategyLabTransfer | null;
   const [status, setStatus] = useState(
     "현재 보유 상태와 월 적립 규칙을 기준으로 여러 전략을 비교합니다."
   );
@@ -217,6 +221,7 @@ export function ResearchWorkspace() {
     "qqq_buy_hold",
     "tqqq_buy_hold"
   ]);
+  const [transferNotice, setTransferNotice] = useState<StrategyLabTransfer | null>(null);
   const winner = result?.rankings[0];
   const currentTotal =
     config.initial_tqqq_value + config.initial_one_x_value + config.initial_cash_value;
@@ -225,6 +230,18 @@ export function ResearchWorkspace() {
       result?.backtests.find((item) => item.strategy === selectedDetail) ?? result?.backtests[0],
     [result, selectedDetail]
   );
+
+  useEffect(() => {
+    if (transfer?.source !== "strategy_recommendation") return;
+    setConfig((current) => ({ ...current, ...transfer.config }));
+    setSelected(transfer.selected);
+    setSelectedDetail(transfer.selected[0]);
+    setResearchTab("compare");
+    setResult(null);
+    setInsight(null);
+    setTransferNotice(transfer);
+    setStatus(`${transfer.plan_title} 추천안을 불러왔습니다. 전략 비교 실행으로 검증을 시작하세요.`);
+  }, [transfer]);
 
   function updateConfig<K extends keyof CompareConfig>(key: K, value: CompareConfig[K]) {
     setConfig((current) => {
@@ -424,6 +441,20 @@ export function ResearchWorkspace() {
           </button>
         )}
       </div>
+
+      {transferNotice ? (
+        <aside className={`research-transfer-note ${transferNotice.fidelity}`} aria-live="polite">
+          <div>
+            <span>추천안에서 불러옴</span>
+            <strong>{transferNotice.plan_title}</strong>
+          </div>
+          <p>
+            {transferNotice.fidelity === "exact"
+              ? "추천안의 운용 규칙과 초기 금액을 그대로 채웠습니다. 비교 실행으로 과거 검증을 시작하세요."
+              : "초기 금액과 비중을 채웠습니다. 일일 QLD·혼합형은 전용 검증 엔진이 없어 가장 가까운 200일선 전략과 비교합니다."}
+          </p>
+        </aside>
+      ) : null}
 
       <div className="research-subtabs">
         <button

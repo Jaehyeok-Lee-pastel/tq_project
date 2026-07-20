@@ -1053,6 +1053,44 @@ textarea:focus {
   outline: none;
 }
 
+.research-transfer-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 18px;
+  border: 1px solid #9ab6ef;
+  border-radius: 9px;
+  padding: 13px 16px;
+  background: var(--soft-blue);
+}
+
+.research-transfer-note.proxy {
+  border-color: #e4c77a;
+  background: #fff8e8;
+}
+
+.research-transfer-note div {
+  display: grid;
+  gap: 3px;
+}
+
+.research-transfer-note span,
+.research-transfer-note p {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.research-transfer-note strong {
+  font-size: 15px;
+}
+
+.research-transfer-note p {
+  max-width: 600px;
+  margin: 0;
+  line-height: 1.5;
+}
+
 .suitability-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

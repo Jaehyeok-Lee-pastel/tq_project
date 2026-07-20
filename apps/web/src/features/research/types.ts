@@ -158,6 +158,15 @@ export type CompareConfig = {
   one_x_upfront_monthly: boolean;
 };
 
+export type StrategyLabTransfer = {
+  source: "strategy_recommendation";
+  plan_title: string;
+  execution_style: "daily" | "staged";
+  fidelity: "exact" | "proxy";
+  config: Partial<CompareConfig>;
+  selected: BacktestStrategy[];
+};
+
 export type Percentiles = {
   p5: number;
   p25: number;
