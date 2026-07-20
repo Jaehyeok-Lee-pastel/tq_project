@@ -780,6 +780,62 @@ textarea:focus {
   background: #f4f6f8;
 }
 
+.execution-style-choice {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.execution-style-choice h3 {
+  margin: 2px 0 0;
+  font-size: 16px;
+}
+
+.execution-style-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.execution-style-options button {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: left;
+  background: #fff;
+}
+
+.execution-style-options button.selected {
+  border-color: var(--blue);
+  background: #eef5ff;
+}
+
+.execution-style-options strong {
+  font-size: 14px;
+}
+
+.execution-style-options span,
+.decision-glance span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.decision-glance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 0;
+}
+
+.decision-glance span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: #fff;
+}
+
 .strategy-trust-panel {
   padding-block: 13px;
   background: transparent;

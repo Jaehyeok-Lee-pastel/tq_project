@@ -4,6 +4,7 @@ import type {
   FxSnapshot,
   HoldingInput,
   InvestorProfile,
+  ExecutionStyle,
   MarketSnapshot,
   PriceRow,
   QuoteSnapshot,
@@ -32,12 +33,22 @@ export async function requestRecommendation(
   cash: number,
   profile: InvestorProfile,
   market: MarketSnapshot,
-  useAi: boolean
+  useAi: boolean,
+  executionStyle: ExecutionStyle,
+  monthlyContribution: number
 ) {
   const response = await fetch(`${apiBaseUrl}/strategy/recommend`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ holdings, cash, profile, market, use_ai: useAi })
+    body: JSON.stringify({
+      holdings,
+      cash,
+      profile,
+      market,
+      use_ai: useAi,
+      execution_style: executionStyle,
+      monthly_contribution: monthlyContribution
+    })
   });
   if (!response.ok) throw new Error(`전략 추천 API 오류: ${response.status}`);
   return (await response.json()) as StrategyResponse;
