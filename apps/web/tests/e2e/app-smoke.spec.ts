@@ -157,7 +157,7 @@ test("portfolio input produces a rendered strategy recommendation", async ({ pag
   await expect(page.getByText("3가지만 고르면 됩니다")).toBeVisible();
   await page.getByRole("button", { name: "답변으로 위험 한도 적용" }).click();
   await expect(page.getByText("45 / 100")).toBeVisible();
-  await page.getByRole("button", { name: "전략 3개 비교" }).click();
+  await page.getByRole("button", { name: "매일 적립 3개 비교" }).click();
 
   await expect(page.getByText("테스트 추천 전략").first()).toBeVisible();
   await expect(

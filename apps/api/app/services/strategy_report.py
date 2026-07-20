@@ -388,9 +388,6 @@ def build_plans(
         distance=distance,
         regime=regime,
     )
-    if request.execution_style == "daily":
-        return [tqqq_plan]
-
     qld_ratio = clamp(18 + score * 0.32, 20, 55)
     qld_ratio = min(qld_ratio, profile.max_single_position_ratio)
     if score <= 35:
@@ -498,7 +495,7 @@ def make_plan(
         allocations=allocations,
         actions=build_actions(holdings, request.cash, total, allocations),
         buy_plan=(
-            build_daily_buy_plan(request.monthly_contribution, distance, regime)
+            build_daily_buy_plan(request.monthly_contribution, distance, regime, allocations)
             if request.execution_style == "daily"
             else build_buy_plan(
                 total,
@@ -508,11 +505,15 @@ def make_plan(
                 request.profile.risk_score,
             )
         ),
-        sell_plan=build_sell_plan(
-            total,
-            allocation_ratio(normalized, "TQQQ"),
-            distance,
-            request.profile.risk_score,
+        sell_plan=(
+            build_daily_defense_plan(allocations, distance)
+            if request.execution_style == "daily"
+            else build_sell_plan(
+                total,
+                allocation_ratio(normalized, "TQQQ"),
+                distance,
+                request.profile.risk_score,
+            )
         ),
         risk_metrics=build_risk_metrics(normalized, distance, regime, request.profile.risk_score),
         scores=scores,
@@ -526,6 +527,7 @@ def build_daily_buy_plan(
     monthly_contribution: float,
     distance: float,
     regime: MarketRegime,
+    allocations: list[PortfolioAllocation],
 ) -> list[SplitStep]:
     daily_budget = round(monthly_contribution / 21) if monthly_contribution else 0
     if regime == "risk_off":
@@ -539,21 +541,48 @@ def build_daily_buy_plan(
             )
         ]
     tier = "정상 적립" if distance < 10 else "감속 적립"
+    daily_targets = [
+        allocation
+        for allocation in allocations
+        if allocation.symbol not in {"CASH", "SGOV", "BIL"}
+    ]
+    target_summary = " · ".join(
+        f"{allocation.symbol} {allocation.target_ratio:.0f}%" for allocation in daily_targets
+    )
     return [
         SplitStep(
             step="오늘 적립",
             trigger="매 거래일 장 마감 후 규칙 확인",
             ratio_of_target=100,
             amount=daily_budget,
-            note=f"월 적립금의 1/21을 집행합니다. 현재는 {tier} 구간입니다.",
+            note=f"월 적립금의 1/21을 {target_summary} 비중으로 집행합니다. 현재는 {tier} 구간입니다.",
         ),
         SplitStep(
-            step="월급일 1x 매수",
-            trigger="월 적립일",
+            step="과열 감속",
+            trigger="QQQ 200일선 대비 +10% 이상",
             ratio_of_target=100,
-            amount=round(monthly_contribution * 0.3),
-            note="1x ETF는 월급일 일괄 매수하거나 예산이 쌓일 때 실행합니다.",
+            amount=0,
+            note="과열 구간에서는 레버리지 ETF 적립을 줄이고, 방어 자금은 현금/SGOV로 대기합니다.",
         ),
+    ]
+
+
+def build_daily_defense_plan(
+    allocations: list[PortfolioAllocation],
+    distance: float,
+) -> list[SplitStep]:
+    leveraged_symbols = [
+        allocation.symbol for allocation in allocations if allocation.symbol in {"TQQQ", "QLD"}
+    ]
+    symbols = "·".join(leveraged_symbols) or "레버리지 ETF"
+    return [
+        SplitStep(
+            step="방어 전환",
+            trigger="QQQ 200일선 +2% 아래 2거래일 확인",
+            ratio_of_target=100,
+            amount=0,
+            note=f"{symbols} 신규 적립을 중지하고 현금/SGOV 방어로 전환합니다. 현재 이격도는 {distance:.1f}%입니다.",
+        )
     ]
 
 
