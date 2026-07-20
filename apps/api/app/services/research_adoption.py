@@ -82,7 +82,7 @@ def build_research_adoption(payload: AdoptResearchRequest) -> ManagedStrategyCre
         ),
         PortfolioAllocation(
             symbol="CASH",
-            name="현금/SGOV",
+            name="현금",
             target_ratio=round(payload.cash_value / total * 100, 1),
             target_amount=round(payload.cash_value, 2),
             role="방어·집행 대기",
@@ -119,7 +119,7 @@ def build_research_adoption(payload: AdoptResearchRequest) -> ManagedStrategyCre
             amount=0,
             note=DEFENSE_TITLES[config.defense_mode]
             + {
-                "cash": ": TQQQ와 1x 전량 매도 후 현금/SGOV 100%.",
+                "cash": ": TQQQ와 1x 전량 매도 후 현금 100%.",
                 "spym_sgov_half": ": 전량 매도 후 SPYM 50% + SGOV/현금 50%.",
                 "hold_one_x": ": TQQQ만 전량 매도, 1x는 계속 보유.",
             }[config.defense_mode],

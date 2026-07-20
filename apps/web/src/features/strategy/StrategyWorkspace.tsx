@@ -304,6 +304,7 @@ export function StrategyWorkspace() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCandidates, setShowCandidates] = useState(false);
   const [useResearchPreset, setUseResearchPreset] = useState(false);
+  const [hasAcknowledgedRisk, setHasAcknowledgedRisk] = useState(false);
   const marketRefreshInFlight = useRef(false);
   const cashInputRef = useRef<HTMLInputElement>(null);
   const riskInputRef = useRef<HTMLElement>(null);
@@ -320,10 +321,16 @@ export function StrategyWorkspace() {
   );
   const onboardingStep = recommendation ? 3 : setupStep;
   const presetCompatible = holdings.every((holding) => ["TQQQ", "QQQM"].includes(holding.symbol.toUpperCase()));
+  const presetRiskCompatible = profile.risk_score >= 91;
+  const canUseResearchPreset = presetCompatible && presetRiskCompatible;
 
   useEffect(() => {
     if (recommendation?.plans[0]) setSelectedPlanId(recommendation.plans[0].id);
   }, [recommendation]);
+
+  useEffect(() => {
+    if (useResearchPreset && !canUseResearchPreset) setUseResearchPreset(false);
+  }, [canUseResearchPreset, useResearchPreset]);
 
   useEffect(() => {
     try {
@@ -463,6 +470,7 @@ export function StrategyWorkspace() {
     try {
       const result = await requestRecommendation(holdings, cash, profile, market, useAi);
       setRecommendation(result);
+      setHasAcknowledgedRisk(false);
       setStatus(
         result.ai_used ? "AI 코치 리포트를 생성했습니다." : "규칙 기반 리포트를 생성했습니다."
       );
@@ -474,12 +482,16 @@ export function StrategyWorkspace() {
   }
 
   async function adoptPlan(plan: StrategyPlan) {
+    if (!hasAcknowledgedRisk) {
+      setStatus("전략을 저장하기 전에 레버리지 ETF와 과거 성과 한계를 확인해 주세요.");
+      return;
+    }
     setLoading("adopt");
     setStatus(`${plan.title}을 내 전략으로 저장하는 중입니다...`);
     try {
       if (useResearchPreset) {
-        if (!presetCompatible) {
-          throw new Error("연구 기반 일일 적립 규칙은 현재 TQQQ·QQQM·현금 보유 상태에서만 바로 채택할 수 있습니다.");
+        if (!canUseResearchPreset) {
+          throw new Error("연구 기반 7:3 규칙은 TQQQ·QQQM·현금 보유 상태와 초공격형 위험 성향(91점 이상)을 모두 확인한 뒤 채택할 수 있습니다.");
         }
         const researchConfig: ResearchStrategyConfig = {
           strategy: "tqqq_daily_200ma",
@@ -515,6 +527,24 @@ export function StrategyWorkspace() {
     }
   }
 
+  async function copyRecommendationSummary() {
+    if (!recommendation || !selectedPlan) return;
+    const summary = [
+      "TQ Coach 전략 요약",
+      `추천 전략: ${selectedPlan.title}`,
+      `시장 상태: ${recommendation.market_regime} (QQQ 200일선 대비 ${formatPct(recommendation.qqq_distance_from_200ma)})`,
+      `내 설정: 위험 성향 ${profile.risk_score}/100 · 총 자산 ${formatKrw(totalCapital)} · 월 추가금 ${formatKrw(cashflow.monthlyContribution)}`,
+      `핵심 규칙: ${selectedPlan.summary}`,
+      "안내: 과거 데이터와 규칙에 기반한 교육·의사결정 보조 정보이며, 미래 수익이나 손실 방지를 보장하지 않습니다."
+    ].join("\n");
+    try {
+      await navigator.clipboard.writeText(summary);
+      setStatus("전략 요약을 복사했습니다. 공유 전 본인 상황에 맞는지 다시 확인해 주세요.");
+    } catch {
+      setStatus("전략 요약을 복사하지 못했습니다. 브라우저 권한을 확인해 주세요.");
+    }
+  }
+
   return (
     <section className="page-grid strategy-workspace">
       {!recommendation ? (
@@ -543,7 +573,7 @@ export function StrategyWorkspace() {
         <div>
           <span className="section-label">내 투자 규칙 만들기</span>
           <h2>보유 자산과 위험 한도를 하나의 운용 규칙으로 만듭니다.</h2>
-          <p>{status}</p>
+          <p aria-live="polite">{status}</p>
           {!recommendation ? (
             <div className="onboarding-market-note">
               <span>QQQ 기준일 {market.as_of}</span>
@@ -597,6 +627,9 @@ export function StrategyWorkspace() {
           onAdopt={adoptPlan}
           adopting={loading === "adopt"}
           researchPresetActive={useResearchPreset}
+          hasAcknowledgedRisk={hasAcknowledgedRisk}
+          onRiskAcknowledgement={setHasAcknowledgedRisk}
+          onCopySummary={copyRecommendationSummary}
         />
       ) : null}
 
@@ -802,17 +835,18 @@ export function StrategyWorkspace() {
             </div>
             <ul>
               <li>월 추가금은 TQQQ 70% · QQQM 30%로 일일 집행</li>
-              <li>QQQ 200일선 +2% 아래 2거래일 확인 시 현금·SGOV 방어</li>
+              <li>QQQ 200일선 +2% 아래 2거래일 확인 시 현금 100% 방어</li>
             </ul>
             <button
               type="button"
               className={useResearchPreset ? "primary" : ""}
               onClick={() => setUseResearchPreset((current) => !current)}
-              disabled={!presetCompatible}
+              disabled={!canUseResearchPreset}
             >
               {useResearchPreset ? "연구 규칙 적용됨" : "이 규칙 적용"}
             </button>
             {!presetCompatible ? <small>현재는 TQQQ·QQQM·현금 보유 상태에서만 이 규칙을 바로 채택할 수 있습니다.</small> : null}
+            {presetCompatible && !presetRiskCompatible ? <small>이 규칙은 TQQQ 비중 70%를 포함하므로 초공격형 위험 성향(91점 이상)에서만 선택할 수 있습니다.</small> : null}
           </section>
           <p className="risk-disclosure">
             레버리지 ETF는 짧은 기간에도 큰 손실이 발생할 수 있습니다. 추천은 과거 데이터와 규칙 기반의
@@ -987,7 +1021,12 @@ export function StrategyWorkspace() {
               ))}
             </div>
             {selectedPlan ? (
-              <PlanDetail plan={selectedPlan} onAdopt={adoptPlan} adopting={loading === "adopt"} />
+              <PlanDetail
+                plan={selectedPlan}
+                onAdopt={adoptPlan}
+                adopting={loading === "adopt"}
+                canAdopt={hasAcknowledgedRisk}
+              />
             ) : null}
           </article>
         )}
@@ -1032,7 +1071,10 @@ function DecisionSummary({
   usdKrw,
   onAdopt,
   adopting,
-  researchPresetActive
+  researchPresetActive,
+  hasAcknowledgedRisk,
+  onRiskAcknowledgement,
+  onCopySummary
 }: {
   recommendation: StrategyResponse;
   plan: StrategyPlan;
@@ -1041,6 +1083,9 @@ function DecisionSummary({
   onAdopt: (plan: StrategyPlan) => void;
   adopting: boolean;
   researchPresetActive: boolean;
+  hasAcknowledgedRisk: boolean;
+  onRiskAcknowledgement: (value: boolean) => void;
+  onCopySummary: () => void;
 }) {
   const topAllocations = [...plan.allocations]
     .sort((a, b) => b.target_ratio - a.target_ratio)
@@ -1084,14 +1129,23 @@ function DecisionSummary({
           <p className="decision-preset-note">채택하면 연구 기반의 7:3 일일 적립·조기 방어 규칙으로 저장됩니다.</p>
         ) : null}
         <div className="decision-actions">
-          <button className="primary" onClick={() => onAdopt(plan)} disabled={adopting}>
+          <button className="primary" onClick={() => onAdopt(plan)} disabled={adopting || !hasAcknowledgedRisk}>
             {adopting ? "저장 중" : "이 전략 채택"}
           </button>
+          <button className="secondary" type="button" onClick={onCopySummary}>전략 요약 복사</button>
           <span>
             {recommendation.market_regime} · QQQ 200일선 대비{" "}
             {formatPct(recommendation.qqq_distance_from_200ma)}
           </span>
         </div>
+        <label className="risk-acknowledgement">
+          <input
+            type="checkbox"
+            checked={hasAcknowledgedRisk}
+            onChange={(event) => onRiskAcknowledgement(event.target.checked)}
+          />
+          <span>레버리지 ETF의 큰 손실 가능성과 과거 검증의 한계를 확인했으며, 내 판단으로 이 전략을 저장합니다.</span>
+        </label>
         <details className="decision-evidence">
           <summary>채택 전 확인</summary>
           <div>
@@ -1159,16 +1213,18 @@ function DecisionSummary({
 function PlanDetail({
   plan,
   onAdopt,
-  adopting
+  adopting,
+  canAdopt
 }: {
   plan: StrategyPlan;
   onAdopt: (plan: StrategyPlan) => void;
   adopting: boolean;
+  canAdopt: boolean;
 }) {
   return (
     <div className="plan-detail">
       <p>{plan.summary}</p>
-      <button className="primary" onClick={() => onAdopt(plan)} disabled={adopting}>
+      <button className="primary" onClick={() => onAdopt(plan)} disabled={adopting || !canAdopt}>
         {adopting ? "전략 저장 중..." : "이 전략 채택하기"}
       </button>
       <div className="score-grid">

@@ -1,6 +1,7 @@
 """Salary-day deposit: cash grows, journal records it, rules stay untouched."""
 
 import pytest
+from pydantic import ValidationError
 
 from app.repositories import managed_strategy_repository as repo
 from app.schemas.managed_strategy import (
@@ -70,3 +71,12 @@ def test_deposit_does_not_touch_rules(strategy):
 def test_deposit_unknown_strategy_raises(strategy):
     with pytest.raises(KeyError):
         repo.apply_deposit("missing-id", DepositRequest(amount=1_000))
+
+
+def test_research_config_rejects_incomplete_daily_allocation():
+    with pytest.raises(ValidationError, match="합계는 100"):
+        ResearchStrategyConfig(
+            strategy="tqqq_daily_200ma",
+            daily_base_tqqq_ratio=70,
+            daily_base_one_x_ratio=20,
+        )

@@ -151,4 +151,10 @@ test("portfolio input produces a rendered strategy recommendation", async ({ pag
   ).toBeVisible();
   await expect(page.getByText("TQQQ").first()).toBeVisible();
   await expect(page.getByText("30.0%").first()).toBeVisible();
+  const adoptionCheckbox = page.getByRole("checkbox");
+  const adoptionButton = page.getByRole("button", { name: "이 전략 채택", exact: true });
+  await expect(adoptionCheckbox).toBeVisible();
+  await expect(adoptionButton).toBeDisabled();
+  await adoptionCheckbox.check();
+  await expect(adoptionButton).toBeEnabled();
 });

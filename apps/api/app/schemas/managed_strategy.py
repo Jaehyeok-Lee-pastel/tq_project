@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.backtest import BacktestStrategy, DefenseMode
 from app.schemas.strategy import MarketSnapshot, StrategyPlan
@@ -46,6 +46,15 @@ class ResearchStrategyConfig(BaseModel):
     one_x_upfront_monthly: bool = False
     preset_id: str | None = None
     preset_version: str | None = None
+
+    @model_validator(mode="after")
+    def validate_daily_allocation(self) -> "ResearchStrategyConfig":
+        if self.strategy != "tqqq_daily_200ma":
+            return self
+        total_ratio = self.daily_base_tqqq_ratio + self.daily_base_one_x_ratio
+        if abs(total_ratio - 100) > 0.01:
+            raise ValueError("일일 적립 규칙의 TQQQ와 1x 비중 합계는 100이어야 합니다.")
+        return self
 
 
 class AdoptResearchRequest(BaseModel):

@@ -427,6 +427,26 @@ textarea:focus {
   font-weight: 700;
 }
 
+.risk-acknowledgement {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.risk-acknowledgement input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--blue);
+}
+
 /* Strategy Studio: inputs on the left, risk contract on the right. */
 .strategy-builder-grid > .strategy-input-panel {
   order: 1;

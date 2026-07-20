@@ -101,6 +101,45 @@ def test_daily_accumulation_research_insight_context_is_accepted():
     assert data["strongest_evidence"]
 
 
+def test_research_preset_adoption_persists_cash_defense_rule(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        strategy_repository,
+        "DATA_PATH",
+        tmp_path / "managed_strategies.json",
+    )
+    response = client.post(
+        "/managed-strategies/adopt-research",
+        json={
+            "research_config": {
+                "strategy": "tqqq_daily_200ma",
+                "daily_base_tqqq_ratio": 70,
+                "daily_base_one_x_ratio": 30,
+                "one_x_symbol": "QQQM",
+                "ma_exit_band_pct": 2,
+                "defense_mode": "cash",
+                "monthly_contribution": 1_000_000,
+                "moving_average_days": 200,
+                "one_x_upfront_monthly": False,
+                "preset_id": "daily_70_30_early_defense_cash_v1",
+                "preset_version": "2026-07",
+            },
+            "market": strategy_payload()["market"],
+            "tqqq_value": 700_000,
+            "one_x_value": 300_000,
+            "cash_value": 100_000,
+            "selected_reason": "research preset API test",
+            "source_total_score": 83,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["research_config"]["defense_mode"] == "cash"
+    assert data["research_config"]["preset_id"] == "daily_70_30_early_defense_cash_v1"
+    cash = next(item for item in data["plan"]["allocations"] if item["symbol"] == "CASH")
+    assert cash["name"] == "현금"
+
+
 def test_recommend_adopt_manage_and_delete_workflow(tmp_path, monkeypatch):
     monkeypatch.setattr(
         strategy_repository,
