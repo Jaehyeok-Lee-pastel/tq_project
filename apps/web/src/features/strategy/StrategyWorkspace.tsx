@@ -325,6 +325,7 @@ export function StrategyWorkspace() {
   const marketRefreshInFlight = useRef(false);
   const cashInputRef = useRef<HTMLInputElement>(null);
   const riskInputRef = useRef<HTMLElement>(null);
+  const resultRef = useRef<HTMLElement>(null);
 
   const totalCapital = useMemo(
     () => cash + holdings.reduce((sum, holding) => sum + holding.amount, 0),
@@ -337,17 +338,34 @@ export function StrategyWorkspace() {
     [profile.risk_score]
   );
   const onboardingStep = recommendation ? 3 : setupStep;
-  const presetCompatible = holdings.every((holding) => ["TQQQ", "QQQM"].includes(holding.symbol.toUpperCase()));
-  const presetRiskCompatible = profile.risk_score >= 91;
-  const canUseResearchPreset = presetCompatible && presetRiskCompatible;
+  const researchPresetRecommended =
+    executionStyle === "daily" &&
+    suitability.horizon === "long" &&
+    suitability.drawdown === "high" &&
+    suitability.leverageExperience === "experienced" &&
+    profile.risk_score >= 70;
+  const preferenceSummary = [
+    suitability.horizon === "long" ? "장기 투자" : "단기 투자",
+    suitability.drawdown === "high" ? "큰 변동 감내" : "손실 제한 우선",
+    executionStyle === "daily" ? "매일 적립" : "조건형 분할"
+  ].join(" · ");
 
   useEffect(() => {
     if (recommendation?.plans[0]) setSelectedPlanId(recommendation.plans[0].id);
   }, [recommendation]);
 
   useEffect(() => {
-    if (useResearchPreset && !canUseResearchPreset) setUseResearchPreset(false);
-  }, [canUseResearchPreset, useResearchPreset]);
+    if (useResearchPreset && !researchPresetRecommended) setUseResearchPreset(false);
+  }, [researchPresetRecommended, useResearchPreset]);
+
+  useEffect(() => {
+    if (!recommendation) return;
+    const timer = window.setTimeout(() => {
+      resultRef.current?.focus({ preventScroll: true });
+      resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [recommendation]);
 
   useEffect(() => {
     try {
@@ -534,8 +552,8 @@ export function StrategyWorkspace() {
         const coreAllocation = plan.allocations.find(
           (allocation) => !["TQQQ", "CASH", "SGOV", "BIL"].includes(allocation.symbol)
         );
-        const dailyRiskRatio = Math.round(tqqqAllocation?.target_ratio ?? 70);
-        const dailyOneXRatio = Math.max(0, 100 - dailyRiskRatio);
+        const dailyRiskRatio = useResearchPreset ? 70 : Math.round(tqqqAllocation?.target_ratio ?? 70);
+        const dailyOneXRatio = useResearchPreset ? 30 : Math.max(0, 100 - dailyRiskRatio);
         const researchConfig: ResearchStrategyConfig = {
           strategy: "tqqq_daily_200ma",
           daily_base_tqqq_ratio: dailyRiskRatio,
@@ -663,6 +681,7 @@ export function StrategyWorkspace() {
       </div> : null}
 
       {recommendation && selectedPlan ? (
+        <section ref={resultRef} className="strategy-result-anchor" tabIndex={-1} aria-label="추천 결과 요약">
         <DecisionSummary
           recommendation={recommendation}
           plan={selectedPlan}
@@ -676,6 +695,7 @@ export function StrategyWorkspace() {
           onRiskAcknowledgement={setHasAcknowledgedRisk}
           onCopySummary={copyRecommendationSummary}
         />
+        </section>
       ) : null}
 
       <div className={`content-grid strategy-builder-grid ${recommendation ? "has-recommendation" : ""}`}>
@@ -872,8 +892,8 @@ export function StrategyWorkspace() {
               }
             />
           </div>
-          <details className="suitability-check">
-            <summary><span>적합성 3문항</span><small>선택 사항</small></summary>
+          <section className="suitability-check preference-check" aria-labelledby="suitability-title">
+            <div className="preference-check-head"><span className="section-label">빠른 선택</span><small>3가지만 고르면 됩니다</small></div>
             <div>
               <h3 id="suitability-title">내 상황에 맞는 위험 한도</h3>
             </div>
@@ -895,7 +915,11 @@ export function StrategyWorkspace() {
               </fieldset>
             </div>
             <button type="button" onClick={applySuitabilityProfile}>답변으로 위험 한도 적용</button>
-          </details>
+            <div className="preference-summary" aria-live="polite">
+              <strong>{preferenceSummary}</strong>
+              <span>위험 한도 {profile.risk_score}/100</span>
+            </div>
+          </section>
           <section className="execution-style-choice" aria-labelledby="execution-style-title">
             <div>
               <span className="section-label">운용 방식</span>
@@ -922,27 +946,26 @@ export function StrategyWorkspace() {
               </button>
             </div>
           </section>
-          <section className={`research-preset-choice ${useResearchPreset ? "selected" : ""}`} aria-labelledby="research-preset-title">
+          {executionStyle === "daily" ? <section className={`research-preset-choice ${useResearchPreset ? "selected" : ""}`} aria-labelledby="research-preset-title">
             <div>
               <span className="section-label">연구 기반 운용 규칙</span>
-              <h3 id="research-preset-title">7:3 · 조기방어 2% · 현금 방어</h3>
+              <h3 id="research-preset-title">
+                {researchPresetRecommended ? "추천 · 7:3 일일 적립" : "7:3 · 조기방어 2% · 현금 방어"}
+              </h3>
               <p>1999년 이후 동일 조건 비교에서 종합 83점으로 상위권에 오른 규칙입니다. 미래 성과를 보장하지 않습니다.</p>
             </div>
             <ul>
               <li>월 추가금은 TQQQ 70% · QQQM 30%로 일일 집행</li>
               <li>QQQ 200일선 +2% 아래 2거래일 확인 시 현금 100% 방어</li>
             </ul>
-            {executionStyle === "daily" ? <button
+            {researchPresetRecommended ? <button
               type="button"
               className={useResearchPreset ? "primary" : ""}
               onClick={() => setUseResearchPreset((current) => !current)}
-              disabled={!canUseResearchPreset}
             >
-              {useResearchPreset ? "연구 규칙 적용됨" : "이 규칙 적용"}
-            </button> : null}
-            {!presetCompatible ? <small>현재는 TQQQ·QQQM·현금 보유 상태에서만 이 규칙을 바로 채택할 수 있습니다.</small> : null}
-            {presetCompatible && !presetRiskCompatible ? <small>이 규칙은 TQQQ 비중 70%를 포함하므로 초공격형 위험 성향(91점 이상)에서만 선택할 수 있습니다.</small> : null}
-          </section>
+              {useResearchPreset ? "7:3 연구 규칙 추천됨" : "이 규칙으로 추천받기"}
+            </button> : <small>장기 투자 · 큰 변동 감내 · 충분한 레버리지 경험을 선택하면 이 규칙을 추천합니다.</small>}
+          </section> : null}
           <p className="risk-disclosure">
             레버리지 ETF는 짧은 기간에도 큰 손실이 발생할 수 있습니다. 추천은 과거 데이터와 규칙 기반의
             교육용 판단 보조이며, 수익이나 손실 한계를 보장하지 않습니다.

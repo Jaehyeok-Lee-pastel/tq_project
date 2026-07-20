@@ -43,6 +43,16 @@ test("layout has no horizontal overflow", async ({ page }) => {
   }
 });
 
+test("daily research rule is suggested for matching preferences", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "현금만으로 시작" }).click();
+  await page.locator('input[type="number"]').first().fill("1000000");
+  await page.getByRole("button", { name: "다음: 위험 성향 정하기" }).click();
+  await page.getByRole("button", { name: "큰 변동 감내" }).click();
+  await page.getByRole("button", { name: "충분함" }).click();
+  await expect(page.getByText("추천 · 7:3 일일 적립")).toBeVisible();
+});
+
 test("portfolio input produces a rendered strategy recommendation", async ({ page }) => {
   await page.route("http://localhost:8000/strategy/recommend", async (route) => {
     await route.fulfill({
@@ -144,9 +154,7 @@ test("portfolio input produces a rendered strategy recommendation", async ({ pag
     .fill("QLD 150만원, ACE K반도체TOP2 100만원");
   await page.getByRole("button", { name: "반영" }).click();
   await page.getByRole("button", { name: "다음: 위험 성향 정하기" }).click();
-  const suitabilitySummary = page.getByText("적합성 3문항", { exact: true });
-  await expect(suitabilitySummary).toBeVisible();
-  await suitabilitySummary.click();
+  await expect(page.getByText("3가지만 고르면 됩니다")).toBeVisible();
   await page.getByRole("button", { name: "답변으로 위험 한도 적용" }).click();
   await expect(page.getByText("45 / 100")).toBeVisible();
   await page.getByRole("button", { name: "전략 3개 비교" }).click();
