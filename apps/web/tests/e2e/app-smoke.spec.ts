@@ -120,7 +120,8 @@ test("portfolio input produces a rendered strategy recommendation", async ({ pag
               confidence_notes: ["결정론적 규칙 기반 추천입니다."]
             },
             pros: ["규칙이 명확합니다."],
-            cons: ["레버리지 변동성이 큽니다."]
+            cons: ["레버리지 변동성이 큽니다."],
+            execution_style: "daily"
           }
         ],
         coach_report: {
@@ -156,6 +157,7 @@ test("portfolio input produces a rendered strategy recommendation", async ({ pag
   ).toBeVisible();
   await expect(page.getByText("TQQQ").first()).toBeVisible();
   await expect(page.getByText("30.0%").first()).toBeVisible();
+  await expect(page.getByText("1·2·3차 매수 없음")).toBeVisible();
   await expect(page.getByLabel("QQQ 200일선 대비 시장 위치")).toBeVisible();
   await expect(page.getByText("데이터·검증·한계 확인")).toBeVisible();
   const adoptionCheckbox = page.getByRole("checkbox");

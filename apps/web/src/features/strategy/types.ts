@@ -1,6 +1,7 @@
 export type PriceRow = { date: string; close: number };
 
 export type ScoreLevel = "low" | "medium" | "high" | "very_high";
+export type ExecutionStyle = "daily" | "staged";
 
 export type HoldingInput = { symbol: string; name: string; amount: number; category: string };
 
@@ -84,6 +85,7 @@ export type StrategyPlan = {
   scores: StrategyScores;
   pros: string[];
   cons: string[];
+  execution_style?: ExecutionStyle;
 };
 
 export type StrategyResponse = {
@@ -111,7 +113,7 @@ export type ResearchStrategyConfig = {
   strategy: "tqqq_daily_200ma";
   daily_base_tqqq_ratio: number;
   daily_base_one_x_ratio: number;
-  one_x_symbol: "QQQM";
+  one_x_symbol: string;
   ma_exit_band_pct: number;
   defense_mode: "cash";
   monthly_contribution: number;

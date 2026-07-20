@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 RiskProfile = Literal["defensive", "balanced", "aggressive", "very_aggressive"]
 MarketRegime = Literal["risk_off", "normal_entry", "reduced_entry", "stretched_entry"]
 ScoreLevel = Literal["low", "medium", "high", "very_high"]
+ExecutionStyle = Literal["daily", "staged"]
 
 
 class HoldingInput(BaseModel):
@@ -46,6 +47,8 @@ class StrategyRecommendRequest(BaseModel):
     profile: InvestorProfile
     market: MarketSnapshot
     use_ai: bool = True
+    execution_style: ExecutionStyle = "staged"
+    monthly_contribution: float = Field(default=0, ge=0, le=20_000_000)
 
 
 class PortfolioAllocation(BaseModel):
@@ -116,6 +119,7 @@ class StrategyPlan(BaseModel):
     scores: StrategyScores
     pros: list[str]
     cons: list[str]
+    execution_style: ExecutionStyle = "staged"
 
 
 class CoachReport(BaseModel):

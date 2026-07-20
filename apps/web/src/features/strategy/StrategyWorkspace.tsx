@@ -23,7 +23,8 @@ import type {
   StrategyPlan,
   StrategyResponse,
   CandidateAsset,
-  ResearchStrategyConfig
+  ResearchStrategyConfig,
+  ExecutionStyle
 } from "./types";
 
 const AUTO_MARKET_REFRESH_MS = 30 * 60 * 1000;
@@ -312,6 +313,7 @@ export function StrategyWorkspace() {
   const [status, setStatus] = useState("포트폴리오와 리스크 점수를 입력한 뒤 전략을 추천받으세요.");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCandidates, setShowCandidates] = useState(false);
+  const [executionStyle, setExecutionStyle] = useState<ExecutionStyle>("daily");
   const [useResearchPreset, setUseResearchPreset] = useState(false);
   const [hasAcknowledgedRisk, setHasAcknowledgedRisk] = useState(false);
   const [marketRefreshFailed, setMarketRefreshFailed] = useState(false);
@@ -498,7 +500,15 @@ export function StrategyWorkspace() {
     setLoading("strategy");
     setStatus("전략 추천을 계산하는 중입니다...");
     try {
-      const result = await requestRecommendation(holdings, cash, profile, market, useAi);
+      const result = await requestRecommendation(
+        holdings,
+        cash,
+        profile,
+        market,
+        useAi,
+        executionStyle,
+        cashflow.monthlyContribution
+      );
       setRecommendation(result);
       setHasAcknowledgedRisk(false);
       setStatus(
@@ -519,28 +529,31 @@ export function StrategyWorkspace() {
     setLoading("adopt");
     setStatus(`${plan.title}을 내 전략으로 저장하는 중입니다...`);
     try {
-      if (useResearchPreset) {
-        if (!canUseResearchPreset) {
-          throw new Error("연구 기반 7:3 규칙은 TQQQ·QQQM·현금 보유 상태와 초공격형 위험 성향(91점 이상)을 모두 확인한 뒤 채택할 수 있습니다.");
-        }
+      if (executionStyle === "daily") {
+        const tqqqAllocation = plan.allocations.find((allocation) => allocation.symbol === "TQQQ");
+        const coreAllocation = plan.allocations.find(
+          (allocation) => !["TQQQ", "CASH", "SGOV", "BIL"].includes(allocation.symbol)
+        );
+        const dailyRiskRatio = Math.round(tqqqAllocation?.target_ratio ?? 70);
+        const dailyOneXRatio = Math.max(0, 100 - dailyRiskRatio);
         const researchConfig: ResearchStrategyConfig = {
           strategy: "tqqq_daily_200ma",
-          daily_base_tqqq_ratio: 70,
-          daily_base_one_x_ratio: 30,
-          one_x_symbol: "QQQM",
+          daily_base_tqqq_ratio: dailyRiskRatio,
+          daily_base_one_x_ratio: dailyOneXRatio,
+          one_x_symbol: coreAllocation?.symbol ?? "QQQM",
           ma_exit_band_pct: 2,
           defense_mode: "cash",
           monthly_contribution: cashflow.monthlyContribution,
           moving_average_days: 200,
           one_x_upfront_monthly: false,
-          preset_id: RESEARCH_PRESET_ID,
+          preset_id: useResearchPreset ? RESEARCH_PRESET_ID : "strategy_daily_recommendation",
           preset_version: RESEARCH_PRESET_VERSION
         };
         const tqqqValue = holdings
           .filter((holding) => holding.symbol.toUpperCase() === "TQQQ")
           .reduce((sum, holding) => sum + holding.amount, 0);
         const oneXValue = holdings
-          .filter((holding) => holding.symbol.toUpperCase() === "QQQM")
+          .filter((holding) => holding.symbol.toUpperCase() === researchConfig.one_x_symbol)
           .reduce((sum, holding) => sum + holding.amount, 0);
         await adoptResearchStrategy(researchConfig, market, tqqqValue, oneXValue, cash);
       } else {
@@ -883,6 +896,32 @@ export function StrategyWorkspace() {
             </div>
             <button type="button" onClick={applySuitabilityProfile}>답변으로 위험 한도 적용</button>
           </details>
+          <section className="execution-style-choice" aria-labelledby="execution-style-title">
+            <div>
+              <span className="section-label">운용 방식</span>
+              <h3 id="execution-style-title">내가 지킬 수 있는 매수 리듬</h3>
+            </div>
+            <div className="execution-style-options">
+              <button
+                type="button"
+                className={executionStyle === "daily" ? "selected" : ""}
+                aria-pressed={executionStyle === "daily"}
+                onClick={() => setExecutionStyle("daily")}
+              >
+                <strong>매일 적립</strong>
+                <span>매일 1회 · 과열 시 자동 감속</span>
+              </button>
+              <button
+                type="button"
+                className={executionStyle === "staged" ? "selected" : ""}
+                aria-pressed={executionStyle === "staged"}
+                onClick={() => setExecutionStyle("staged")}
+              >
+                <strong>조건형 분할</strong>
+                <span>조건 발생 시 · 1·2·3차 진입</span>
+              </button>
+            </div>
+          </section>
           <section className={`research-preset-choice ${useResearchPreset ? "selected" : ""}`} aria-labelledby="research-preset-title">
             <div>
               <span className="section-label">연구 기반 운용 규칙</span>
@@ -893,14 +932,14 @@ export function StrategyWorkspace() {
               <li>월 추가금은 TQQQ 70% · QQQM 30%로 일일 집행</li>
               <li>QQQ 200일선 +2% 아래 2거래일 확인 시 현금 100% 방어</li>
             </ul>
-            <button
+            {executionStyle === "daily" ? <button
               type="button"
               className={useResearchPreset ? "primary" : ""}
               onClick={() => setUseResearchPreset((current) => !current)}
               disabled={!canUseResearchPreset}
             >
               {useResearchPreset ? "연구 규칙 적용됨" : "이 규칙 적용"}
-            </button>
+            </button> : null}
             {!presetCompatible ? <small>현재는 TQQQ·QQQM·현금 보유 상태에서만 이 규칙을 바로 채택할 수 있습니다.</small> : null}
             {presetCompatible && !presetRiskCompatible ? <small>이 규칙은 TQQQ 비중 70%를 포함하므로 초공격형 위험 성향(91점 이상)에서만 선택할 수 있습니다.</small> : null}
           </section>
@@ -1145,6 +1184,7 @@ function DecisionSummary({
   onRiskAcknowledgement: (value: boolean) => void;
   onCopySummary: () => void;
 }) {
+  const isDaily = plan.execution_style === "daily";
   const topAllocations = [...plan.allocations]
     .sort((a, b) => b.target_ratio - a.target_ratio)
     .slice(0, 3);
@@ -1181,10 +1221,10 @@ function DecisionSummary({
   return (
     <article className="decision-summary panel">
       <div className="decision-main">
-        <span className="section-label">오늘의 판단</span>
+        <span className="section-label">{isDaily ? "오늘의 적립" : "다음 진입 조건"}</span>
         <h2>{recommendation.coach_report.headline}</h2>
         <p>{primaryAction}</p>
-        {researchPresetActive ? (
+        {researchPresetActive && isDaily ? (
           <p className="decision-preset-note">채택하면 연구 기반의 7:3 일일 적립·조기 방어 규칙으로 저장됩니다.</p>
         ) : null}
         <section className="market-position" aria-label="QQQ 200일선 대비 시장 위치">
@@ -1201,6 +1241,11 @@ function DecisionSummary({
             {recommendation.market_regime} · QQQ 200일선 대비{" "}
             {formatPct(recommendation.qqq_distance_from_200ma)}
           </span>
+        </div>
+        <div className="decision-glance" aria-label="핵심 실행 요약">
+          <span>{isDaily ? "매 거래일 1회 확인" : "조건 발생 시 실행"}</span>
+          <span>{isDaily ? "1·2·3차 매수 없음" : "1·2·3차 순서 실행"}</span>
+          <span>{isDaily ? "방어 시 적립 중지" : "방어 시 신규 진입 중지"}</span>
         </div>
         <label className="risk-acknowledgement">
           <input

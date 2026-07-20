@@ -388,6 +388,8 @@ def build_plans(
         distance=distance,
         regime=regime,
     )
+    if request.execution_style == "daily":
+        return [tqqq_plan]
 
     qld_ratio = clamp(18 + score * 0.32, 20, 55)
     qld_ratio = min(qld_ratio, profile.max_single_position_ratio)
@@ -495,12 +497,16 @@ def make_plan(
         summary=summary,
         allocations=allocations,
         actions=build_actions(holdings, request.cash, total, allocations),
-        buy_plan=build_buy_plan(
-            total,
-            allocation_ratio(normalized, "TQQQ"),
-            distance,
-            regime,
-            request.profile.risk_score,
+        buy_plan=(
+            build_daily_buy_plan(request.monthly_contribution, distance, regime)
+            if request.execution_style == "daily"
+            else build_buy_plan(
+                total,
+                allocation_ratio(normalized, "TQQQ"),
+                distance,
+                regime,
+                request.profile.risk_score,
+            )
         ),
         sell_plan=build_sell_plan(
             total,
@@ -512,7 +518,43 @@ def make_plan(
         scores=scores,
         pros=build_pros(plan_id),
         cons=build_cons(plan_id, regime),
+        execution_style=request.execution_style,
     )
+
+
+def build_daily_buy_plan(
+    monthly_contribution: float,
+    distance: float,
+    regime: MarketRegime,
+) -> list[SplitStep]:
+    daily_budget = round(monthly_contribution / 21) if monthly_contribution else 0
+    if regime == "risk_off":
+        return [
+            SplitStep(
+                step="방어 유지",
+                trigger="QQQ 200일선 회복 확인",
+                ratio_of_target=0,
+                amount=0,
+                note="신규 TQQQ 적립은 멈추고 현금/SGOV 방어를 유지합니다.",
+            )
+        ]
+    tier = "정상 적립" if distance < 10 else "감속 적립"
+    return [
+        SplitStep(
+            step="오늘 적립",
+            trigger="매 거래일 장 마감 후 규칙 확인",
+            ratio_of_target=100,
+            amount=daily_budget,
+            note=f"월 적립금의 1/21을 집행합니다. 현재는 {tier} 구간입니다.",
+        ),
+        SplitStep(
+            step="월급일 1x 매수",
+            trigger="월 적립일",
+            ratio_of_target=100,
+            amount=round(monthly_contribution * 0.3),
+            note="1x ETF는 월급일 일괄 매수하거나 예산이 쌓일 때 실행합니다.",
+        ),
+    ]
 
 
 def align_plan_copy_with_allocation(
