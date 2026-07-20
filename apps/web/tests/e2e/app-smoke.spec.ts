@@ -143,7 +143,9 @@ test("portfolio input produces a rendered strategy recommendation", async ({ pag
     .fill("QLD 150만원, ACE K반도체TOP2 100만원");
   await page.getByRole("button", { name: "반영" }).click();
   await page.getByRole("button", { name: "다음: 위험 성향 정하기" }).click();
-  await expect(page.getByRole("heading", { name: "내 상황에 맞는 위험 한도를 먼저 정합니다." })).toBeVisible();
+  const suitabilitySummary = page.getByText("적합성 3문항", { exact: true });
+  await expect(suitabilitySummary).toBeVisible();
+  await suitabilitySummary.click();
   await page.getByRole("button", { name: "답변으로 위험 한도 적용" }).click();
   await expect(page.getByText("45 / 100")).toBeVisible();
   await page.getByRole("button", { name: "전략 3개 비교" }).click();
