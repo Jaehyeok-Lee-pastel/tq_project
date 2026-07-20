@@ -31,4 +31,5 @@ STRATEGY_NAMES = {
     "tqqq_200ma": "QQQ 200일선 기반 TQQQ 전략",
     "qld_200ma": "QQQ 200일선 기반 QLD 전략",
     "tqqq_daily_200ma": "QQQ 200일선 기반 TQQQ 일일 적립 감속",
+    "qld_daily_200ma": "QQQ 200일선 기반 QLD 일일 적립 감속",
 }

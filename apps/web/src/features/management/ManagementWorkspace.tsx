@@ -1372,8 +1372,8 @@ export function ManagementWorkspace() {
                     <strong>
                       {todayDecision.daily_budget > 0 && todayDecision.regime === "above"
                         ? selected.research_config.one_x_upfront_monthly
-                          ? `TQQQ ${formatKrw(todayDecision.tqqq_buy_amount)} · ${selected.research_config.one_x_symbol}는 월급일 일괄`
-                          : `TQQQ ${formatKrw(todayDecision.tqqq_buy_amount)} + ${selected.research_config.one_x_symbol} ${formatKrw(todayDecision.one_x_buy_amount)}`
+                          ? `${todayDecision.leveraged_symbol} ${formatKrw(todayDecision.tqqq_buy_amount)} · ${selected.research_config.one_x_symbol}는 월급일 일괄`
+                          : `${todayDecision.leveraged_symbol} ${formatKrw(todayDecision.tqqq_buy_amount)} + ${selected.research_config.one_x_symbol} ${formatKrw(todayDecision.one_x_buy_amount)}`
                         : "현금 대기"}
                     </strong>
                   </span>

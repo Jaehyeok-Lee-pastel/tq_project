@@ -139,6 +139,7 @@ def compare_request_to_backtest(
         "daily_base_tqqq_ratio": request.daily_base_tqqq_ratio,
         "daily_base_one_x_ratio": request.daily_base_one_x_ratio,
         "initial_tqqq_value": request.initial_tqqq_value,
+        "initial_qld_value": request.initial_qld_value,
         "initial_one_x_value": request.initial_one_x_value,
         "initial_cash_value": request.initial_cash_value,
         "ma_exit_band_pct": request.ma_exit_band_pct,
@@ -154,7 +155,7 @@ async def build_rule_robustness(
     request: StrategyCompareRequest,
     strategy,
 ) -> RuleRobustnessSummary | None:
-    if strategy == "tqqq_daily_200ma":
+    if strategy in {"tqqq_daily_200ma", "qld_daily_200ma"}:
         variations = DAILY_RULE_VARIATIONS
         note = (
             "이격 밴드(10/20/30%), 감속 계수(0.65/0.30), 200일선 이탈 밴드를 흔들었을 때 "
@@ -399,6 +400,7 @@ RULE_COMPLEXITY_PENALTY = {
     "qqq_buy_hold": 0,
     "tqqq_buy_hold": 0,
     "tqqq_daily_200ma": 8,
+    "qld_daily_200ma": 8,
     "tqqq_200ma": 18,
     "qld_200ma": 18,
 }
@@ -414,7 +416,7 @@ def decisions_per_year(result: BacktestRunResponse, years: float) -> float:
     """
     if result.strategy in BUY_AND_HOLD_STRATEGIES:
         return 0.0
-    if result.strategy == "tqqq_daily_200ma":
+    if result.strategy in {"tqqq_daily_200ma", "qld_daily_200ma"}:
         decision_count = sum(1 for trade in result.trades if trade.action == "sell")
     else:
         decision_count = len(result.trades)
@@ -502,6 +504,7 @@ def estimate_strategy_risk(result: BacktestRunResponse) -> int:
         "qqq_buy_hold": 45,
         "qld_200ma": 62,
         "tqqq_daily_200ma": 72,
+        "qld_daily_200ma": 62,
         "tqqq_200ma": 78,
         "tqqq_buy_hold": 95,
     }.get(result.strategy, 60)
@@ -543,7 +546,7 @@ def reason_for(result: BacktestRunResponse, strategy_risk: int, user_risk_score:
         decision_rate = decisions_per_year(result, backtest_years(result))
         if decision_rate >= 8:
             reason += f" 다만 연 {decision_rate:.0f}회 안팎의 시그널 대응 규율이 필요합니다."
-        elif result.strategy == "tqqq_daily_200ma":
+        elif result.strategy in {"tqqq_daily_200ma", "qld_daily_200ma"}:
             reason += " 매수는 기계적 적립이라 자동화할 수 있고 판단이 필요한 매도는 드뭅니다."
         return reason
     if cagr_edge > 0.5:

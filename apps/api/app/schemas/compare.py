@@ -34,6 +34,7 @@ class StrategyCompareRequest(BaseModel):
     daily_base_tqqq_ratio: float = Field(default=70, ge=0, le=100)
     daily_base_one_x_ratio: float = Field(default=30, ge=0, le=100)
     initial_tqqq_value: float = Field(default=0, ge=0, le=1_000_000_000)
+    initial_qld_value: float = Field(default=0, ge=0, le=1_000_000_000)
     initial_one_x_value: float = Field(default=0, ge=0, le=1_000_000_000)
     initial_cash_value: float = Field(default=0, ge=0, le=1_000_000_000)
     ma_exit_band_pct: float = Field(default=0, ge=-5, le=5)

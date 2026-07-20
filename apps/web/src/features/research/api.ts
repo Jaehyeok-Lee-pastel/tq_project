@@ -73,6 +73,7 @@ export async function requestMonteCarlo(
     monthly_contribution: config.monthly_contribution,
     initial_capital: config.initial_capital,
     initial_tqqq_value: config.initial_tqqq_value,
+    initial_qld_value: config.initial_qld_value ?? 0,
     initial_one_x_value: config.initial_one_x_value,
     initial_cash_value: config.initial_cash_value,
     cash_yield: config.cash_yield,
@@ -88,7 +89,7 @@ export async function requestMonteCarlo(
   return (await response.json()) as MonteCarloReport;
 }
 
-export const ADOPTABLE: BacktestStrategy[] = ["tqqq_daily_200ma", "tqqq_200ma", "qld_200ma"];
+export const ADOPTABLE: BacktestStrategy[] = ["tqqq_daily_200ma", "qld_daily_200ma", "tqqq_200ma", "qld_200ma"];
 
 export async function requestAdopt(
   config: CompareConfig,
@@ -105,10 +106,11 @@ export async function requestAdopt(
   };
   if (!history.sma200) throw new Error("QQQ 200일선 데이터를 계산할 수 없습니다.");
   const defenseMode =
-    config.defense_mode || (item.strategy === "tqqq_daily_200ma" ? "hold_one_x" : "cash");
+    config.defense_mode || (item.strategy.endsWith("daily_200ma") ? "hold_one_x" : "cash");
   const body = {
     research_config: {
       strategy: item.strategy,
+      daily_leveraged_symbol: item.strategy === "qld_daily_200ma" ? "QLD" : "TQQQ",
       daily_base_tqqq_ratio: config.daily_base_tqqq_ratio,
       daily_base_one_x_ratio: config.daily_base_one_x_ratio,
       one_x_symbol: config.one_x_symbol,
@@ -129,6 +131,7 @@ export async function requestAdopt(
       as_of: history.latest.date
     },
     tqqq_value: config.initial_tqqq_value,
+    qld_value: item.strategy === "qld_daily_200ma" ? config.initial_tqqq_value : (config.initial_qld_value ?? 0),
     one_x_value: config.initial_one_x_value,
     cash_value: config.initial_cash_value,
     selected_reason: `개인연구 전략 비교에서 채택 (${item.strategy_name})`,

@@ -8,6 +8,7 @@ BacktestStrategy = Literal[
     "tqqq_200ma",
     "qld_200ma",
     "tqqq_daily_200ma",
+    "qld_daily_200ma",
 ]
 
 # What the portfolio holds while QQQ is below the MA200 exit line.
@@ -35,6 +36,7 @@ class BacktestRunRequest(BaseModel):
     daily_base_tqqq_ratio: float = Field(default=70, ge=0, le=100)
     daily_base_one_x_ratio: float = Field(default=30, ge=0, le=100)
     initial_tqqq_value: float = Field(default=0, ge=0, le=1_000_000_000)
+    initial_qld_value: float = Field(default=0, ge=0, le=1_000_000_000)
     initial_one_x_value: float = Field(default=0, ge=0, le=1_000_000_000)
     initial_cash_value: float = Field(default=0, ge=0, le=1_000_000_000)
     # Rule-robustness experiment knobs. Defaults reproduce the base rules;

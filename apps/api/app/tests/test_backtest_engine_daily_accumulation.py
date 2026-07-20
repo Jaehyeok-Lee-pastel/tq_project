@@ -89,6 +89,33 @@ def test_daily_accumulation_uses_existing_holdings_as_starting_state():
     assert any(trade.symbol == "QQQM" and trade.ratio == 30.0 for trade in trades)
 
 
+def test_qld_daily_accumulation_uses_qld_prices_and_trade_labels():
+    frames = [
+        frame(1, 105, 100),
+        frame(2, 106, 102),
+        frame(3, 107, 104),
+    ]
+
+    curve, trades = simulate_strategy(
+        frames,
+        BacktestRunRequest(
+            strategy="qld_daily_200ma",
+            initial_capital=2_500_000,
+            initial_qld_value=1_600_000,
+            initial_one_x_value=500_000,
+            initial_cash_value=400_000,
+            monthly_contribution=1_000_000,
+            daily_base_tqqq_ratio=70,
+            daily_base_one_x_ratio=30,
+            one_x_symbol="QQQM",
+            one_x_upfront_monthly=True,
+        ),
+    )
+
+    assert curve[0].equity == 2_500_000
+    assert any(trade.symbol == "QLD" and trade.ratio == 70.0 for trade in trades)
+
+
 def test_buy_hold_strategies_receive_monthly_contributions_for_fair_comparison():
     frames = [
         frame(1, 100, 100),

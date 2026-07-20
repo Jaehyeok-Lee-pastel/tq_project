@@ -75,6 +75,7 @@ export async function adoptResearchStrategy(
   researchConfig: ResearchStrategyConfig,
   market: MarketSnapshot,
   tqqqValue: number,
+  qldValue: number,
   oneXValue: number,
   cashValue: number
 ) {
@@ -85,6 +86,7 @@ export async function adoptResearchStrategy(
       research_config: researchConfig,
       market,
       tqqq_value: tqqqValue,
+      qld_value: qldValue,
       one_x_value: oneXValue,
       cash_value: cashValue,
       selected_reason: "전략 수립에서 연구 기반 일일 적립 규칙을 선택",

@@ -92,6 +92,7 @@ def build_backtest_request_from_strategy(
             strategy=config.strategy,
             initial_capital=total,
             initial_tqqq_value=_allocation_ratio(strategy, "TQQQ") / 100 * total,
+            initial_qld_value=_allocation_ratio(strategy, "QLD") / 100 * total,
             initial_one_x_value=_allocation_ratio(strategy, config.one_x_symbol) / 100 * total,
             initial_cash_value=_allocation_ratio(strategy, "CASH") / 100 * total,
             monthly_contribution=config.monthly_contribution,
@@ -443,5 +444,4 @@ def apply_philosophy_upgrade(
         _save(items, user_id)
         return items[index]
     raise KeyError(strategy_id)
-
 

@@ -3,7 +3,8 @@ export type BacktestStrategy =
   | "tqqq_buy_hold"
   | "tqqq_200ma"
   | "qld_200ma"
-  | "tqqq_daily_200ma";
+  | "tqqq_daily_200ma"
+  | "qld_daily_200ma";
 
 export type Verdict = "best_fit" | "high_return" | "defensive" | "too_risky" | "watch";
 
@@ -138,6 +139,7 @@ export type CompareConfig = {
   end_date: string;
   initial_capital: number;
   initial_tqqq_value: number;
+  initial_qld_value?: number;
   initial_one_x_value: number;
   initial_cash_value: number;
   risk_score: number;

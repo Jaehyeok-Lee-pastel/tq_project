@@ -18,6 +18,7 @@ from app.schemas.strategy import (
 
 STRATEGY_TITLES = {
     "tqqq_daily_200ma": "매일 적립 감속",
+    "qld_daily_200ma": "매일 적립 감속",
     "tqqq_200ma": "TQQQ 200일선 분할",
     "qld_200ma": "QLD 200일선 분할",
     "qqq_buy_hold": "QQQ 장기 보유",
@@ -32,6 +33,7 @@ RISK_SCORE_BY_STRATEGY = {
     "qqq_buy_hold": 45,
     "qld_200ma": 62,
     "tqqq_daily_200ma": 72,
+    "qld_daily_200ma": 62,
     "tqqq_200ma": 78,
     "tqqq_buy_hold": 95,
 }
@@ -39,7 +41,9 @@ RISK_SCORE_BY_STRATEGY = {
 
 def build_research_adoption(payload: AdoptResearchRequest) -> ManagedStrategyCreate:
     config = payload.research_config
-    total = payload.tqqq_value + payload.one_x_value + payload.cash_value
+    leveraged_symbol = config.daily_leveraged_symbol
+    leveraged_value = payload.tqqq_value if leveraged_symbol == "TQQQ" else payload.qld_value
+    total = leveraged_value + payload.one_x_value + payload.cash_value
     if total <= 0:
         raise ValueError("채택하려면 현재 보유 금액(TQQQ/1x/현금 합계)이 0보다 커야 합니다.")
 
@@ -47,7 +51,7 @@ def build_research_adoption(payload: AdoptResearchRequest) -> ManagedStrategyCre
         f"{STRATEGY_TITLES.get(config.strategy, config.strategy)} "
         f"{config.daily_base_tqqq_ratio:.0f}:{config.daily_base_one_x_ratio:.0f}"
         f" · 밴드 {config.ma_exit_band_pct:+.0f}% · {DEFENSE_TITLES[config.defense_mode]}"
-        if config.strategy == "tqqq_daily_200ma"
+        if config.strategy in {"tqqq_daily_200ma", "qld_daily_200ma"}
         else (
             f"{STRATEGY_TITLES.get(config.strategy, config.strategy)}"
             f" · 밴드 {config.ma_exit_band_pct:+.0f}% · {DEFENSE_TITLES[config.defense_mode]}"
@@ -67,10 +71,10 @@ def build_research_adoption(payload: AdoptResearchRequest) -> ManagedStrategyCre
 
     allocations = [
         PortfolioAllocation(
-            symbol="TQQQ",
-            name="ProShares UltraPro QQQ",
-            target_ratio=round(payload.tqqq_value / total * 100, 1),
-            target_amount=round(payload.tqqq_value, 2),
+            symbol=leveraged_symbol,
+            name="ProShares UltraPro QQQ" if leveraged_symbol == "TQQQ" else "ProShares Ultra QQQ",
+            target_ratio=round(leveraged_value / total * 100, 1),
+            target_amount=round(leveraged_value, 2),
             role="레버리지 성장 엔진",
         ),
         PortfolioAllocation(
@@ -98,7 +102,7 @@ def build_research_adoption(payload: AdoptResearchRequest) -> ManagedStrategyCre
             ratio_of_target=config.daily_base_tqqq_ratio,
             amount=round(daily_amount, 0),
             note=(
-                f"월 적립을 21거래일로 나눠 TQQQ {config.daily_base_tqqq_ratio:.0f}% / "
+                f"월 적립을 21거래일로 나눠 {leveraged_symbol} {config.daily_base_tqqq_ratio:.0f}% / "
                 f"{config.one_x_symbol} {config.daily_base_one_x_ratio:.0f}% 매수. "
                 "이격 +10/20/30%에서 감속(x0.65/x0.30/중지)."
             ),
@@ -132,14 +136,14 @@ def build_research_adoption(payload: AdoptResearchRequest) -> ManagedStrategyCre
         risk_score=RISK_SCORE_BY_STRATEGY.get(config.strategy, 70),
         fit_score=base_confidence,
         expected_return_score=base_confidence,
-        execution_difficulty="low" if config.strategy == "tqqq_daily_200ma" else "medium",
+            execution_difficulty="low" if config.strategy in {"tqqq_daily_200ma", "qld_daily_200ma"} else "medium",
         confidence_breakdown=ConfidenceBreakdown(
             rule_clarity=90,
             market_fit=base_confidence,
             cash_defense=85 if config.defense_mode != "hold_one_x" else 60,
             drawdown_control=75,
             overfit_resistance=85,
-            execution_quality=90 if config.strategy == "tqqq_daily_200ma" else 65,
+            execution_quality=90 if config.strategy in {"tqqq_daily_200ma", "qld_daily_200ma"} else 65,
             user_fit=base_confidence,
         ),
         confidence_notes=[
@@ -158,9 +162,9 @@ def build_research_adoption(payload: AdoptResearchRequest) -> ManagedStrategyCre
         allocations=allocations,
         actions=[
             TradeAction(
-                symbol="TQQQ",
+                symbol=leveraged_symbol,
                 action="hold",
-                amount=payload.tqqq_value,
+                amount=leveraged_value,
                 reason="현재 보유분에서 출발 — 오늘의 판단 지시에 따라 관리",
             )
         ],
@@ -181,7 +185,7 @@ def build_research_adoption(payload: AdoptResearchRequest) -> ManagedStrategyCre
         pros=[
             "백테스트로 검증된 규칙을 그대로 실행",
             "판단이 필요한 행동이 드물어 실행 규율을 지키기 쉬움"
-            if config.strategy == "tqqq_daily_200ma"
+            if config.strategy in {"tqqq_daily_200ma", "qld_daily_200ma"}
             else "낙폭 방어력이 검증된 분할 규칙",
         ],
         cons=[

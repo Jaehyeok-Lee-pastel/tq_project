@@ -104,6 +104,7 @@ def compute_today_decision(
     config: ResearchStrategyConfig,
     qqq_rows: list[PriceRow],
 ) -> TodayDecision:
+    leveraged_symbol = config.daily_leveraged_symbol
     ma_days = config.moving_average_days
     if len(qqq_rows) < ma_days + 5:
         raise ValueError("오늘 판단에는 이동평균 계산에 충분한 QQQ 일봉 데이터가 필요합니다.")
@@ -143,18 +144,18 @@ def compute_today_decision(
         one_x_amount = round(daily_budget * one_x_ratio)
         if tier >= 3:
             action = "stop_new_tqqq"
-            headline = "신규 TQQQ 적립 중지 — 1x/현금으로만 적립"
+            headline = f"신규 {leveraged_symbol} 적립 중지 — 1x/현금으로만 적립"
         elif tier >= 1:
             action = "accumulate_decelerated"
-            headline = f"감속 적립 — TQQQ 일일 매수 {tqqq_ratio * 100:.0f}%로 축소"
+            headline = f"감속 적립 — {leveraged_symbol} 일일 매수 {tqqq_ratio * 100:.0f}%로 축소"
         else:
             action = "accumulate"
             headline = "정상 적립 — 기본 비율대로 매수"
-        instructions = [daily_accumulation_reason(distance)]
+        instructions = [daily_accumulation_reason(distance, leveraged_symbol)]
         if daily_budget > 0:
             if config.one_x_upfront_monthly:
                 instructions.append(
-                    f"오늘 TQQQ 적립 {tqqq_amount:,.0f}원"
+                    f"오늘 {leveraged_symbol} 적립 {tqqq_amount:,.0f}원"
                     + (
                         f" (일 예산 {daily_budget:,.0f}원 중 잔여는 현금 대기)"
                         if daily_budget - tqqq_amount > 1
@@ -168,7 +169,7 @@ def compute_today_decision(
                 )
             else:
                 instructions.append(
-                    f"오늘 적립 {daily_budget:,.0f}원: TQQQ {tqqq_amount:,.0f}원 + "
+                    f"오늘 적립 {daily_budget:,.0f}원: {leveraged_symbol} {tqqq_amount:,.0f}원 + "
                     f"{config.one_x_symbol} {one_x_amount:,.0f}원"
                     + (
                         f" (잔여 {daily_budget - tqqq_amount - one_x_amount:,.0f}원은 현금 대기)"
@@ -182,6 +183,7 @@ def compute_today_decision(
                 f"남은 방어 현금의 1/{REDEPLOY_DAYS - redeploy_day + 1}을 같은 비율로 추가 매수"
             )
         return TodayDecision(
+            leveraged_symbol=leveraged_symbol,
             as_of=latest.date,
             data_age_days=data_age_days(latest.date),
             qqq_close=round(latest.close, 2),
@@ -244,6 +246,7 @@ def compute_today_decision(
         )
 
     return TodayDecision(
+        leveraged_symbol=leveraged_symbol,
         as_of=latest.date,
         data_age_days=data_age_days(latest.date),
         qqq_close=round(latest.close, 2),

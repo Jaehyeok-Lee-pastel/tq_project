@@ -110,7 +110,8 @@ export type StrategyResponse = {
 export type CandidateAsset = { symbol: string; name: string; category: string; role: string };
 
 export type ResearchStrategyConfig = {
-  strategy: "tqqq_daily_200ma";
+  strategy: "tqqq_daily_200ma" | "qld_daily_200ma";
+  daily_leveraged_symbol: "TQQQ" | "QLD";
   daily_base_tqqq_ratio: number;
   daily_base_one_x_ratio: number;
   one_x_symbol: string;

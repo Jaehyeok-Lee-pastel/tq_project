@@ -30,6 +30,7 @@ const chartColors = ["#2563eb", "#0f8a63", "#a96700", "#d04444", "#7c3aed"];
 
 const allStrategies: { id: BacktestStrategy; label: string }[] = [
   { id: "tqqq_daily_200ma", label: "보유 기반 일일 적립 감속" },
+  { id: "qld_daily_200ma", label: "QLD 일일 적립 감속" },
   { id: "tqqq_200ma", label: "TQQQ 200일선 분할" },
   { id: "qld_200ma", label: "QLD 200일선" },
   { id: "qqq_buy_hold", label: "QQQ 장기 보유" },
@@ -224,7 +225,7 @@ export function ResearchWorkspace() {
   const [transferNotice, setTransferNotice] = useState<StrategyLabTransfer | null>(null);
   const winner = result?.rankings[0];
   const currentTotal =
-    config.initial_tqqq_value + config.initial_one_x_value + config.initial_cash_value;
+    config.initial_tqqq_value + (config.initial_qld_value ?? 0) + config.initial_one_x_value + config.initial_cash_value;
   const detailBacktest = useMemo(
     () =>
       result?.backtests.find((item) => item.strategy === selectedDetail) ?? result?.backtests[0],
@@ -246,7 +247,7 @@ export function ResearchWorkspace() {
   function updateConfig<K extends keyof CompareConfig>(key: K, value: CompareConfig[K]) {
     setConfig((current) => {
       const next = { ...current, [key]: value };
-      const total = next.initial_tqqq_value + next.initial_one_x_value + next.initial_cash_value;
+      const total = next.initial_tqqq_value + (next.initial_qld_value ?? 0) + next.initial_one_x_value + next.initial_cash_value;
       return total > 0 ? { ...next, initial_capital: total } : next;
     });
   }
@@ -262,7 +263,7 @@ export function ResearchWorkspace() {
   function applyPreset(preset: (typeof presets)[number]) {
     setConfig((current) => {
       const next = { ...current, ...preset.config };
-      const total = next.initial_tqqq_value + next.initial_one_x_value + next.initial_cash_value;
+      const total = next.initial_tqqq_value + (next.initial_qld_value ?? 0) + next.initial_one_x_value + next.initial_cash_value;
       return total > 0 ? { ...next, initial_capital: total } : next;
     });
     setSelected(preset.selected);
@@ -553,6 +554,16 @@ export function ResearchWorkspace() {
                   value={config.initial_tqqq_value}
                   onChange={(event) =>
                     updateConfig("initial_tqqq_value", Number(event.target.value))
+                  }
+                />
+              </label>
+              <label>
+                현재 QLD
+                <input
+                  type="number"
+                  value={config.initial_qld_value ?? 0}
+                  onChange={(event) =>
+                    updateConfig("initial_qld_value", Number(event.target.value))
                   }
                 />
               </label>

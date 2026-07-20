@@ -177,7 +177,8 @@ def simulate_strategy(
             (request.fee_bps + request.slippage_bps) / 10_000,
         )
 
-    if request.strategy == "tqqq_daily_200ma":
+    if request.strategy in {"tqqq_daily_200ma", "qld_daily_200ma"}:
+        leveraged_symbol = "TQQQ" if request.strategy == "tqqq_daily_200ma" else "QLD"
         return simulate_daily_accumulation_200ma_strategy(
             frames=frames,
             initial_capital=request.initial_capital,
@@ -185,7 +186,11 @@ def simulate_strategy(
             base_tqqq_ratio=request.daily_base_tqqq_ratio / 100,
             base_one_x_ratio=request.daily_base_one_x_ratio / 100,
             one_x_symbol=request.one_x_symbol,
-            initial_tqqq_value=request.initial_tqqq_value,
+            initial_tqqq_value=(
+                request.initial_tqqq_value
+                if leveraged_symbol == "TQQQ"
+                else request.initial_qld_value
+            ),
             initial_one_x_value=request.initial_one_x_value,
             initial_cash_value=request.initial_cash_value,
             daily_cash_return=((1 + request.cash_yield / 100) ** (1 / TRADING_DAYS_PER_YEAR) - 1),
@@ -202,6 +207,7 @@ def simulate_strategy(
             tqqq_batch_days=request.tqqq_batch_days,
             one_x_batch_days=request.one_x_batch_days,
             one_x_upfront_monthly=request.one_x_upfront_monthly,
+            leveraged_symbol=leveraged_symbol,
         )
 
     target_symbol = "TQQQ" if request.strategy == "tqqq_200ma" else "QLD"
@@ -253,6 +259,7 @@ def simulate_daily_accumulation_200ma_strategy(
     tqqq_batch_days: int = 1,
     one_x_batch_days: int = 1,
     one_x_upfront_monthly: bool = False,
+    leveraged_symbol: str = "TQQQ",
 ) -> tuple[list[EquityPoint], list[TradeLogItem]]:
     has_initial_holdings = any(
         value > 0 for value in (initial_tqqq_value, initial_one_x_value, initial_cash_value)
@@ -300,7 +307,7 @@ def simulate_daily_accumulation_200ma_strategy(
     for index in range(1, len(frames)):
         prev = frames[index - 1]
         current = frames[index]
-        tqqq_value *= 1 + price_return(prev, current, "TQQQ")
+        tqqq_value *= 1 + price_return(prev, current, leveraged_symbol)
         one_x_value *= 1 + price_return(prev, current, one_x_symbol)
         defense_spy_value *= 1 + price_return(prev, current, "SPY")
         cash *= 1 + daily_cash_return
@@ -329,9 +336,9 @@ def simulate_daily_accumulation_200ma_strategy(
                     TradeLogItem(
                         date=current.date,
                         action="sell",
-                        symbol="TQQQ",
+                        symbol=leveraged_symbol,
                         ratio=0,
-                        reason=f"QQQ가 {moving_average_days}일선 아래에서 2거래일 이상 마감해 TQQQ 전량 방어 전환",
+                        reason=f"QQQ가 {moving_average_days}일선 아래에서 2거래일 이상 마감해 {leveraged_symbol} 전량 방어 전환",
                     )
                 )
                 tqqq_value = 0.0
@@ -444,9 +451,9 @@ def simulate_daily_accumulation_200ma_strategy(
                         TradeLogItem(
                             date=current.date,
                             action="buy",
-                            symbol="TQQQ",
+                            symbol=leveraged_symbol,
                             ratio=round(tqqq_buy_ratio * 100, 1),
-                            reason=daily_accumulation_reason(distance),
+                            reason=daily_accumulation_reason(distance, leveraged_symbol),
                         )
                     )
                 if one_x_buy > 0 and log_this_day:
@@ -456,7 +463,7 @@ def simulate_daily_accumulation_200ma_strategy(
                             action="buy",
                             symbol=one_x_symbol,
                             ratio=round(one_x_buy_ratio * 100, 1),
-                            reason="TQQQ 과열 감속분을 1x 나스닥/코어 자산으로 적립",
+                            reason=f"{leveraged_symbol} 과열 감속분을 1x 나스닥/코어 자산으로 적립",
                         )
                     )
                 if log_this_day:
@@ -504,9 +511,9 @@ def simulate_daily_accumulation_200ma_strategy(
         if defense_spy_value > 0:
             position = "SPYM+SGOV"
         elif tqqq_value > 0 and one_x_value > 0:
-            position = f"TQQQ+{one_x_symbol}"
+            position = f"{leveraged_symbol}+{one_x_symbol}"
         elif tqqq_value > 0:
-            position = "TQQQ"
+            position = leveraged_symbol
         elif one_x_value > 0:
             position = one_x_symbol
         curve.append(
@@ -555,15 +562,15 @@ def deceleration_tier(distance: float) -> int:
     return 3
 
 
-def daily_accumulation_reason(distance: float) -> str:
+def daily_accumulation_reason(distance: float, leveraged_symbol: str = "TQQQ") -> str:
     pct = distance * 100
     if distance < 0.10:
         return f"QQQ 200일선 위 +{pct:.1f}% 구간: 기본 7:3 적립 유지"
     if distance < 0.20:
-        return f"QQQ 200일선 대비 +{pct:.1f}% 구간: TQQQ 일일 매수 65%로 감속"
+        return f"QQQ 200일선 대비 +{pct:.1f}% 구간: {leveraged_symbol} 일일 매수 65%로 감속"
     if distance < 0.30:
-        return f"QQQ 200일선 대비 +{pct:.1f}% 구간: 과열 대응으로 TQQQ 일일 매수 30%로 감속"
-    return f"QQQ 200일선 대비 +{pct:.1f}% 구간: TQQQ 신규 적립 중지"
+        return f"QQQ 200일선 대비 +{pct:.1f}% 구간: 과열 대응으로 {leveraged_symbol} 일일 매수 30%로 감속"
+    return f"QQQ 200일선 대비 +{pct:.1f}% 구간: {leveraged_symbol} 신규 적립 중지"
 
 
 def simulate_staged_200ma_strategy(

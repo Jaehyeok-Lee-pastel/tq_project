@@ -41,6 +41,7 @@ export type ResearchConfig = {
   preset_version?: string | null;
 };
 export type TodayDecision = {
+  leveraged_symbol: "TQQQ" | "QLD";
   as_of: string;
   data_age_days: number;
   qqq_close: number;

@@ -315,6 +315,7 @@ function buildResearchTransfer(
     config: {
       initial_capital: totalCapital,
       initial_tqqq_value: tqqq?.target_amount ?? 0,
+      initial_qld_value: qld?.target_amount ?? 0,
       initial_one_x_value: oneX?.target_amount ?? 0,
       initial_cash_value: cash,
       monthly_contribution: monthlyContribution,
@@ -327,7 +328,7 @@ function buildResearchTransfer(
       defense_mode: "cash"
     },
     selected: isQldPlan
-      ? ["qld_200ma", "tqqq_200ma", "qqq_buy_hold"]
+      ? ["qld_daily_200ma", "qld_200ma", "tqqq_200ma", "qqq_buy_hold"]
       : ["tqqq_daily_200ma", "tqqq_200ma", "qld_200ma", "qqq_buy_hold"]
   };
 }
@@ -593,13 +594,18 @@ export function StrategyWorkspace() {
     try {
       if (executionStyle === "daily") {
         const tqqqAllocation = plan.allocations.find((allocation) => allocation.symbol === "TQQQ");
+        const qldAllocation = plan.allocations.find((allocation) => allocation.symbol === "QLD");
+        const leveragedSymbol = qldAllocation && !tqqqAllocation ? "QLD" : "TQQQ";
         const coreAllocation = plan.allocations.find(
           (allocation) => !["TQQQ", "CASH", "SGOV", "BIL"].includes(allocation.symbol)
         );
-        const dailyRiskRatio = useResearchPreset ? 70 : Math.round(tqqqAllocation?.target_ratio ?? 70);
+        const dailyRiskRatio = useResearchPreset
+          ? 70
+          : Math.round((leveragedSymbol === "QLD" ? qldAllocation : tqqqAllocation)?.target_ratio ?? 70);
         const dailyOneXRatio = useResearchPreset ? 30 : Math.max(0, 100 - dailyRiskRatio);
         const researchConfig: ResearchStrategyConfig = {
-          strategy: "tqqq_daily_200ma",
+          strategy: leveragedSymbol === "QLD" ? "qld_daily_200ma" : "tqqq_daily_200ma",
+          daily_leveraged_symbol: leveragedSymbol,
           daily_base_tqqq_ratio: dailyRiskRatio,
           daily_base_one_x_ratio: dailyOneXRatio,
           one_x_symbol: coreAllocation?.symbol ?? "QQQM",
@@ -614,10 +620,13 @@ export function StrategyWorkspace() {
         const tqqqValue = holdings
           .filter((holding) => holding.symbol.toUpperCase() === "TQQQ")
           .reduce((sum, holding) => sum + holding.amount, 0);
+        const qldValue = holdings
+          .filter((holding) => holding.symbol.toUpperCase() === "QLD")
+          .reduce((sum, holding) => sum + holding.amount, 0);
         const oneXValue = holdings
           .filter((holding) => holding.symbol.toUpperCase() === researchConfig.one_x_symbol)
           .reduce((sum, holding) => sum + holding.amount, 0);
-        await adoptResearchStrategy(researchConfig, market, tqqqValue, oneXValue, cash);
+        await adoptResearchStrategy(researchConfig, market, tqqqValue, qldValue, oneXValue, cash);
       } else {
         await adoptManagedStrategy(plan, market, totalCapital);
       }

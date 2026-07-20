@@ -31,6 +31,7 @@ class ResearchStrategyConfig(BaseModel):
     """
 
     strategy: BacktestStrategy = "tqqq_daily_200ma"
+    daily_leveraged_symbol: Literal["TQQQ", "QLD"] = "TQQQ"
     daily_base_tqqq_ratio: float = Field(default=70, ge=0, le=100)
     daily_base_one_x_ratio: float = Field(default=30, ge=0, le=100)
     one_x_symbol: str = "QQQM"
@@ -49,8 +50,11 @@ class ResearchStrategyConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_daily_allocation(self) -> "ResearchStrategyConfig":
-        if self.strategy != "tqqq_daily_200ma":
+        if self.strategy not in {"tqqq_daily_200ma", "qld_daily_200ma"}:
             return self
+        expected_symbol = "TQQQ" if self.strategy == "tqqq_daily_200ma" else "QLD"
+        if self.daily_leveraged_symbol != expected_symbol:
+            raise ValueError("일일 적립 전략의 레버리지 ETF가 전략 종류와 일치해야 합니다.")
         total_ratio = self.daily_base_tqqq_ratio + self.daily_base_one_x_ratio
         if abs(total_ratio - 100) > 0.01:
             raise ValueError("일일 적립 규칙의 TQQQ와 1x 비중 합계는 100이어야 합니다.")
@@ -61,6 +65,7 @@ class AdoptResearchRequest(BaseModel):
     research_config: ResearchStrategyConfig
     market: MarketSnapshot
     tqqq_value: float = Field(default=0, ge=0)
+    qld_value: float = Field(default=0, ge=0)
     one_x_value: float = Field(default=0, ge=0)
     cash_value: float = Field(default=0, ge=0)
     selected_reason: str = ""
@@ -81,6 +86,7 @@ TodayAction = Literal[
 
 
 class TodayDecision(BaseModel):
+    leveraged_symbol: Literal["TQQQ", "QLD"] = "TQQQ"
     as_of: str
     data_age_days: int
     qqq_close: float
