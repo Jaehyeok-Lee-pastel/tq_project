@@ -1062,7 +1062,7 @@ export function StrategyWorkspace() {
           ) : null}
           <div className="onboarding-next-action">
             <button className="primary" type="button" onClick={runStrategy} disabled={loading === "strategy"}>
-              <Bot size={16} /> {loading === "strategy" ? "전략 비교 중..." : "전략 3개 비교"}
+              <Bot size={16} /> {loading === "strategy" ? "전략 비교 중..." : executionStyle === "daily" ? "매일 적립 3개 비교" : "조건형 전략 3개 비교"}
             </button>
             <small>추천 결과에서 목표 비중, 약한 상황, 검증 기준을 비교할 수 있습니다.</small>
           </div>

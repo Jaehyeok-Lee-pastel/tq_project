@@ -26,9 +26,15 @@ def make_request(execution_style: str) -> StrategyRecommendRequest:
 def test_daily_recommendation_uses_daily_execution_copy() -> None:
     response = recommend_strategy(make_request("daily"))
 
-    assert len(response.plans) == 1
-    assert response.plans[0].execution_style == "daily"
-    assert [step.step for step in response.plans[0].buy_plan] == ["오늘 적립", "월급일 1x 매수"]
+    assert len(response.plans) == 3
+    assert {plan.id for plan in response.plans} == {
+        "tqqq_200ma_coach",
+        "qld_stable_aggressive",
+        "validated_universe_mix",
+    }
+    assert all(plan.execution_style == "daily" for plan in response.plans)
+    assert all(plan.buy_plan[0].step == "오늘 적립" for plan in response.plans)
+    assert "QLD" in response.plans[1].buy_plan[0].note
 
 
 def test_staged_recommendation_keeps_staged_execution_copy() -> None:
