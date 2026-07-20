@@ -92,6 +92,11 @@ const exampleQuickInput = "QLD 150만원, ACE K반도체TOP2 100만원";
 const userSettingsKey = "tqcoach.userSettings";
 
 type CashflowSettings = { monthlyContribution: number; payDay: number };
+type SuitabilityAnswers = {
+  horizon: "short" | "long";
+  drawdown: "limited" | "high";
+  leverageExperience: "new" | "experienced";
+};
 
 function loadCashflowSettings(): CashflowSettings {
   try {
@@ -146,6 +151,10 @@ function riskProfileKind(score: number): InvestorProfile["risk_profile"] {
   if (score <= 60) return "balanced";
   if (score <= 82) return "aggressive";
   return "very_aggressive";
+}
+function suitabilityScore(answers: SuitabilityAnswers) {
+  if (answers.horizon === "short" || answers.drawdown === "limited") return 45;
+  return answers.leverageExperience === "experienced" ? 92 : 76;
 }
 function recommendedProfile(
   score: number
@@ -305,6 +314,12 @@ export function StrategyWorkspace() {
   const [showCandidates, setShowCandidates] = useState(false);
   const [useResearchPreset, setUseResearchPreset] = useState(false);
   const [hasAcknowledgedRisk, setHasAcknowledgedRisk] = useState(false);
+  const [marketRefreshFailed, setMarketRefreshFailed] = useState(false);
+  const [suitability, setSuitability] = useState<SuitabilityAnswers>({
+    horizon: "long",
+    drawdown: "limited",
+    leverageExperience: "new"
+  });
   const marketRefreshInFlight = useRef(false);
   const cashInputRef = useRef<HTMLInputElement>(null);
   const riskInputRef = useRef<HTMLElement>(null);
@@ -405,6 +420,19 @@ export function StrategyWorkspace() {
       `리스크 ${profile.risk_score}점 기준 권장값을 적용했습니다. ${profileRecommendationText(profile.risk_score)}`
     );
   }
+  function applySuitabilityProfile() {
+    const score = suitabilityScore(suitability);
+    const recommended = recommendedProfile(score);
+    setProfile((current) => ({
+      ...current,
+      ...recommended,
+      risk_score: score,
+      risk_profile: riskProfileKind(score),
+      allow_tqqq: score >= 45,
+      prefer_200ma: true
+    }));
+    setStatus(`적합성 답변을 반영해 위험 성향을 ${score}/100으로 설정했습니다. 언제든 직접 조정할 수 있습니다.`);
+  }
   const loadMarket = useCallback(async (options?: { silent?: boolean }) => {
     if (marketRefreshInFlight.current) return;
     marketRefreshInFlight.current = true;
@@ -429,6 +457,7 @@ export function StrategyWorkspace() {
         qqq_high20: nextHigh20,
         as_of: latest.date
       });
+      setMarketRefreshFailed(false);
       const quoteSymbols = ["QQQ", "QQQM", "TQQQ", "QLD", "SGOV", "BIL"];
       const quoteResults = await Promise.allSettled(
         quoteSymbols.map((symbol) => fetchQuote(symbol))
@@ -446,6 +475,7 @@ export function StrategyWorkspace() {
       });
       setStatus(`${silent ? "자동 " : ""}시장 지표 갱신 완료: ${latest.date} · ${refreshedAt}`);
     } catch (error) {
+      setMarketRefreshFailed(true);
       if (!silent) setStatus(error instanceof Error ? error.message : "시장 지표 갱신 실패");
     } finally {
       marketRefreshInFlight.current = false;
@@ -574,6 +604,7 @@ export function StrategyWorkspace() {
           <span className="section-label">내 투자 규칙 만들기</span>
           <h2>보유 자산과 위험 한도를 하나의 운용 규칙으로 만듭니다.</h2>
           <p aria-live="polite">{status}</p>
+          {marketRefreshFailed ? <button type="button" className="secondary market-retry" onClick={() => void loadMarket()}>시장 지표 다시 시도</button> : null}
           {!recommendation ? (
             <div className="onboarding-market-note">
               <span>QQQ 기준일 {market.as_of}</span>
@@ -622,6 +653,7 @@ export function StrategyWorkspace() {
         <DecisionSummary
           recommendation={recommendation}
           plan={selectedPlan}
+          market={market}
           quotes={quotes}
           usdKrw={usdKrw}
           onAdopt={adoptPlan}
@@ -827,6 +859,30 @@ export function StrategyWorkspace() {
               }
             />
           </div>
+          <section className="suitability-check" aria-labelledby="suitability-title">
+            <div>
+              <span className="section-label">간단 적합성 확인</span>
+              <h3 id="suitability-title">내 상황에 맞는 위험 한도를 먼저 정합니다.</h3>
+            </div>
+            <div className="suitability-options">
+              <fieldset>
+                <legend>투자 기간</legend>
+                <button type="button" aria-pressed={suitability.horizon === "short"} onClick={() => setSuitability((current) => ({ ...current, horizon: "short" }))}>3년 미만</button>
+                <button type="button" aria-pressed={suitability.horizon === "long"} onClick={() => setSuitability((current) => ({ ...current, horizon: "long" }))}>3년 이상</button>
+              </fieldset>
+              <fieldset>
+                <legend>큰 손실이 났을 때</legend>
+                <button type="button" aria-pressed={suitability.drawdown === "limited"} onClick={() => setSuitability((current) => ({ ...current, drawdown: "limited" }))}>손실 제한 우선</button>
+                <button type="button" aria-pressed={suitability.drawdown === "high"} onClick={() => setSuitability((current) => ({ ...current, drawdown: "high" }))}>큰 변동 감내</button>
+              </fieldset>
+              <fieldset>
+                <legend>레버리지 ETF 경험</legend>
+                <button type="button" aria-pressed={suitability.leverageExperience === "new"} onClick={() => setSuitability((current) => ({ ...current, leverageExperience: "new" }))}>처음·제한적</button>
+                <button type="button" aria-pressed={suitability.leverageExperience === "experienced"} onClick={() => setSuitability((current) => ({ ...current, leverageExperience: "experienced" }))}>충분함</button>
+              </fieldset>
+            </div>
+            <button type="button" onClick={applySuitabilityProfile}>답변으로 위험 한도 적용</button>
+          </section>
           <section className={`research-preset-choice ${useResearchPreset ? "selected" : ""}`} aria-labelledby="research-preset-title">
             <div>
               <span className="section-label">연구 기반 운용 규칙</span>
@@ -1067,6 +1123,7 @@ function ListBlock({ title, items, tone }: { title: string; items: string[]; ton
 function DecisionSummary({
   recommendation,
   plan,
+  market,
   quotes,
   usdKrw,
   onAdopt,
@@ -1078,6 +1135,7 @@ function DecisionSummary({
 }: {
   recommendation: StrategyResponse;
   plan: StrategyPlan;
+  market: MarketSnapshot;
   quotes: Record<string, QuoteSnapshot>;
   usdKrw: FxSnapshot | null;
   onAdopt: (plan: StrategyPlan) => void;
@@ -1096,6 +1154,7 @@ function DecisionSummary({
   const capMetric = plan.risk_metrics.find((metric) => metric.label.includes("상한"));
   const primaryAction = recommendation.coach_report.next_actions[0] ?? plan.summary;
   const primaryWarning = recommendation.coach_report.warnings[0];
+  const marketPosition = Math.max(4, Math.min(96, 50 + recommendation.qqq_distance_from_200ma * 2));
   const executableAllocations = topAllocations
     .map((allocation) => {
       const quote = quotes[allocation.symbol];
@@ -1128,6 +1187,11 @@ function DecisionSummary({
         {researchPresetActive ? (
           <p className="decision-preset-note">채택하면 연구 기반의 7:3 일일 적립·조기 방어 규칙으로 저장됩니다.</p>
         ) : null}
+        <section className="market-position" aria-label="QQQ 200일선 대비 시장 위치">
+          <div><span>QQQ 200일선 대비</span><strong>{formatPct(recommendation.qqq_distance_from_200ma)}</strong></div>
+          <div className="market-position-track" aria-hidden="true"><i style={{ left: `${marketPosition}%` }} /></div>
+          <small>방어 기준은 200일선 +2% 아래 2거래일 확인이며, 기준일은 {market.as_of}입니다.</small>
+        </section>
         <div className="decision-actions">
           <button className="primary" onClick={() => onAdopt(plan)} disabled={adopting || !hasAcknowledgedRisk}>
             {adopting ? "저장 중" : "이 전략 채택"}
@@ -1161,6 +1225,15 @@ function DecisionSummary({
               <strong>검증 기준</strong>
               <p>QQQ 200일선, 목표 비중, 실행 규칙을 기준으로 관리합니다.</p>
             </section>
+          </div>
+        </details>
+        <details className="decision-trust">
+          <summary>데이터·검증·한계 확인</summary>
+          <div>
+            <section><strong>데이터 기준</strong><span>QQQ 종가와 200일 이동평균 · {market.as_of}</span></section>
+            <section><strong>검증 범위</strong><span>과거 데이터와 규칙 기반 비교 결과입니다.</span></section>
+            <section><strong>포함하지 않은 것</strong><span>개인 세금, 실제 체결가, 개인의 모든 재무 상황은 반영하지 않습니다.</span></section>
+            <section><strong>규칙 변경</strong><span>저장 후 관리 화면에서 적용 규칙과 실행 기록을 확인합니다.</span></section>
           </div>
         </details>
       </div>

@@ -18,7 +18,7 @@ test.beforeEach(async ({ page }) => {
 test("primary workflow pages remain reachable", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "전략 수립" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /보유 자산과 위험 한도/ })).toBeVisible();
+  await expect(page.getByPlaceholder("보유 종목과 금액을 입력하세요")).toBeVisible();
 
   await page.getByRole("link", { name: "오늘 판단" }).click();
   await expect(page.getByRole("heading", { name: /오늘의 행동부터 확인/ })).toBeVisible();
@@ -143,6 +143,9 @@ test("portfolio input produces a rendered strategy recommendation", async ({ pag
     .fill("QLD 150만원, ACE K반도체TOP2 100만원");
   await page.getByRole("button", { name: "반영" }).click();
   await page.getByRole("button", { name: "다음: 위험 성향 정하기" }).click();
+  await expect(page.getByRole("heading", { name: "내 상황에 맞는 위험 한도를 먼저 정합니다." })).toBeVisible();
+  await page.getByRole("button", { name: "답변으로 위험 한도 적용" }).click();
+  await expect(page.getByText("45 / 100")).toBeVisible();
   await page.getByRole("button", { name: "전략 3개 비교" }).click();
 
   await expect(page.getByText("테스트 추천 전략").first()).toBeVisible();
@@ -151,6 +154,8 @@ test("portfolio input produces a rendered strategy recommendation", async ({ pag
   ).toBeVisible();
   await expect(page.getByText("TQQQ").first()).toBeVisible();
   await expect(page.getByText("30.0%").first()).toBeVisible();
+  await expect(page.getByLabel("QQQ 200일선 대비 시장 위치")).toBeVisible();
+  await expect(page.getByText("데이터·검증·한계 확인")).toBeVisible();
   const adoptionCheckbox = page.getByRole("checkbox");
   const adoptionButton = page.getByRole("button", { name: "이 전략 채택", exact: true });
   await expect(adoptionCheckbox).toBeVisible();
