@@ -2249,3 +2249,253 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 }
+
+/* UI Skills / strategy studio polish: make the setup path readable at a glance. */
+.strategy-workspace {
+  gap: 20px;
+}
+
+.strategy-workspace .hero-panel {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: end;
+  padding: 4px 0 24px;
+}
+
+.strategy-workspace .hero-panel::before {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 56px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--blue);
+  content: "";
+}
+
+.strategy-workspace .hero-panel h2 {
+  max-width: 760px;
+  margin-top: 6px;
+  font-size: clamp(26px, 2.15vw, 34px);
+  line-height: 1.18;
+  text-wrap: balance;
+}
+
+.strategy-workspace .hero-panel p,
+.strategy-workspace .onboarding-cashflow-note,
+.strategy-workspace .risk-disclosure {
+  max-width: 720px;
+  text-wrap: pretty;
+}
+
+.strategy-workspace .hero-actions {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 2px;
+}
+
+.strategy-workspace .hero-actions button {
+  white-space: nowrap;
+}
+
+.strategy-workspace .strategy-onboarding {
+  gap: 24px;
+  padding: 18px 20px;
+  border-left-width: 3px;
+}
+
+.strategy-workspace .strategy-onboarding > div > strong {
+  max-width: 250px;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.strategy-workspace .strategy-onboarding li {
+  min-height: 58px;
+  padding: 10px 11px;
+  background: var(--surface-subtle);
+}
+
+.strategy-workspace .strategy-onboarding li.active {
+  box-shadow: inset 0 0 0 1px rgba(31, 99, 233, 0.1);
+}
+
+.strategy-workspace .strategy-builder-grid {
+  gap: 16px;
+}
+
+.strategy-workspace .strategy-input-panel,
+.strategy-workspace .strategy-risk-panel,
+.strategy-workspace .strategy-onboarding-preview {
+  border-radius: 10px;
+}
+
+.strategy-workspace .strategy-input-panel {
+  padding: 22px;
+}
+
+.strategy-workspace .strategy-input-panel .quick-input {
+  gap: 8px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+}
+
+.strategy-workspace .strategy-input-panel .quick-input label {
+  gap: 7px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.strategy-workspace .strategy-input-panel .quick-input textarea {
+  min-height: 78px;
+  resize: vertical;
+  background: #fff;
+}
+
+.strategy-workspace .strategy-input-panel .holding-row {
+  padding: 8px;
+  border: 1px solid transparent;
+}
+
+.strategy-workspace .strategy-input-panel .holding-row:focus-within {
+  border-color: rgba(31, 99, 233, 0.4);
+  background: #fff;
+}
+
+.strategy-workspace .strategy-input-panel .inline-actions {
+  align-items: end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.strategy-workspace .strategy-input-panel .inline-actions label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.strategy-workspace .onboarding-next-action {
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 16px;
+}
+
+.strategy-workspace .onboarding-next-action small {
+  max-width: 460px;
+}
+
+.strategy-workspace .strategy-onboarding-preview {
+  padding: 20px;
+  background: #fbfcff;
+}
+
+.strategy-workspace .strategy-onboarding-preview ol {
+  gap: 10px;
+}
+
+.strategy-workspace .strategy-onboarding-preview li {
+  min-height: 96px;
+  border-color: #dfe5ef;
+  background: #fff;
+}
+
+.strategy-workspace .strategy-risk-panel {
+  padding: 22px;
+}
+
+.strategy-workspace .strategy-risk-panel .risk-slider-box {
+  margin-top: 14px;
+}
+
+.strategy-workspace .execution-style-options button {
+  min-height: 96px;
+  padding: 14px;
+}
+
+.strategy-workspace .execution-style-options button.selected {
+  box-shadow: inset 0 0 0 1px rgba(31, 99, 233, 0.12);
+}
+
+.strategy-workspace .research-preset-choice {
+  padding: 16px;
+  background: var(--surface-subtle);
+}
+
+.strategy-workspace .strategy-input-summary {
+  padding: 14px 16px;
+  border: 1px solid #cfe2da;
+  border-radius: 8px;
+  background: #f4faf7;
+}
+
+@media (max-width: 900px) {
+  .strategy-workspace .hero-panel {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .strategy-workspace .hero-actions {
+    width: 100%;
+  }
+
+  .strategy-workspace .hero-actions button {
+    flex: 1;
+  }
+
+  .strategy-workspace .strategy-input-panel .quick-input {
+    grid-template-columns: 1fr;
+  }
+
+  .strategy-workspace .strategy-input-panel .quick-input button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 620px) {
+  .strategy-workspace {
+    gap: 16px;
+  }
+
+  .strategy-workspace .hero-panel {
+    padding-bottom: 20px;
+  }
+
+  .strategy-workspace .hero-panel h2 {
+    font-size: 25px;
+  }
+
+  .strategy-workspace .strategy-onboarding,
+  .strategy-workspace .strategy-onboarding ol {
+    grid-template-columns: 1fr;
+  }
+
+  .strategy-workspace .strategy-onboarding li {
+    display: flex;
+  }
+
+  .strategy-workspace .strategy-onboarding li small {
+    display: block;
+  }
+
+  .strategy-workspace .strategy-input-panel,
+  .strategy-workspace .strategy-risk-panel,
+  .strategy-workspace .strategy-onboarding-preview {
+    padding: 16px;
+  }
+
+  .strategy-workspace .strategy-onboarding-preview ol,
+  .strategy-workspace .execution-style-options {
+    grid-template-columns: 1fr;
+  }
+
+  .strategy-workspace .onboarding-next-action {
+    align-items: stretch;
+  }
+}
